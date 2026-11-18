@@ -7,11 +7,11 @@
 ---
 
 ## Фаза 0. Каркас репозитория и документация
-- [ ] **0.1.** Инициализировать `pnpm`-монорепозиторий (`packages/core`, `packages/sim`, 
+- [x] **0.1.** Инициализировать `pnpm`-монорепозиторий (`packages/core`, `packages/sim`, 
 `packages/mcp`, `apps/desktop`) с общим строгим `tsconfig.base.json`, ESLint, Prettier и Vitest.
-- [ ] **0.2.** Настроить корневые скрипты (`typecheck`, `lint`, `test`, `build`) и проверить 
+- [x] **0.2.** Настроить корневые скрипты (`typecheck`, `lint`, `test`, `build`) и проверить 
 актуальность команд в `AGENTS.md`.
-- [ ] **0.3.** Настроить базовый GitHub Actions workflow (`.github/workflows/ci.yml`), который 
+- [x] **0.3.** Настроить базовый GitHub Actions workflow (`.github/workflows/ci.yml`), который 
 на каждый push/PR прогоняет `lint`, `typecheck` и `test`.
 - **Критерий готовности:** все проверки (`pnpm typecheck && pnpm lint && pnpm test`) проходят 
 без ошибок на базовом каркасе.

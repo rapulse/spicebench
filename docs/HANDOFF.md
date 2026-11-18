@@ -1,26 +1,28 @@
 # HANDOFF — Оперативный статус проекта
 
-- **Последнее обновление:** старт проекта (инициализация документации)
-- **Текущая фаза:** Фаза 0 — Каркас репозитория и документация
-- **Последний коммит:** —
+- **Последнее обновление:** завершена Фаза 0 (каркас монорепозитория и CI)
+- **Текущая фаза:** Фаза 1 — Ядро схемы и графа (`packages/core`)
+- **Последний коммит:** `c16f02e` (feat(repo): initialize monorepo scaffold (Phase 0))
 
-## Что сделано в прошлой сессии
-- Создана структура документации (`AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, 
-`docs/DECISIONS.md`, `docs/wiki/*`).
-- Код пакетов ещё не написан.
+## Что сделано
+- Развернут `pnpm`-монорепозиторий (`packages/core`, `packages/sim`, `packages/mcp`, `apps/desktop`).
+- Настроен строгий TypeScript (`tsconfig.base.json`), ESLint 9 (Flat Config), Prettier, Vitest.
+- Добавлен GitHub Actions workflow (`.github/workflows/ci.yml`).
+- Настроен `.gitignore` (исключены архивы, бинарники, системные файлы и кэши).
+- Инициализирован git-репозиторий, зафиксирован базовый коммит.
 
 ## Состояние проверок
-- `typecheck`: не настроен
-- `lint`: не настроен
-- `test`: не настроен
+- `typecheck`: пройден (`tsc --noEmit` во всех пакетах)
+- `lint`: пройден (`eslint .`)
+- `test`: пройден (`vitest run` — 4/4 passing)
 
 ## Известные проблемы и нюансы
-- Уточнить при выполнении Фазы 2.2 конкретный пакет/способ поставки `ngspice` в Node Worker 
-(проверить совместимость на macOS arm64 и Windows x64 для сборки `electron-builder`).
+- В pnpm v11+ нативные сборки управляются через `allowBuilds` в `pnpm-workspace.yaml`. Зафиксирован `esbuild: true`.
+- Прямой вызов `/usr/bin/git` на macOS блокируется песочницей из-за шима xcode-select; используется бинарник из `/Library/Developer/CommandLineTools/usr/bin/git`.
 
-## Следующий шаг (с чего начать новому чату)
-Выполнить **Фазу 0** целиком (пункты `0.1`, `0.2`, `0.3` из `docs/ROADMAP.md`):
-1. Развернуть `pnpm`-монорепозиторий с пакетами `core`, `sim`, `mcp` и заготовкой 
-`apps/desktop`.
-2. Настроить строгий TypeScript, ESLint, Prettier и Vitest.
-3. Добавить GitHub Actions CI и убедиться, что `typecheck`, `lint` и `test` проходят.
+## Следующий шаг
+Выполнить **Пункт 1.1** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L20-L21)):
+1. Описать доменные схемы цепи на Zod в `packages/core/src/schema`:
+   - типы элементов, пины, номиналы, провода, точки-узлы (junction dots), приборы.
+2. Реализовать парсер номиналов со шкалами (инженерная нотация `10k`, `100u`, `1meg`).
+3. Покрыть тестами и актуализировать `docs/wiki/circuit-schema.md`.
