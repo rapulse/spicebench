@@ -3,3 +3,4 @@ export * from "./schema";
 export * from "./graph";
 export * from "./router";
 export * from "./commands";
+export * from "./validator";
