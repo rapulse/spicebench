@@ -2,7 +2,7 @@
 
 - **Последнее обновление:** завершена Фаза 1 (ядро схемы, граф, Manhattan router, Undo/Redo, валидатор топологии в `packages/core`)
 - **Текущая фаза:** Фаза 2 — Генератор SPICE и симулятор (`packages/sim`)
-- **Последний коммит:** —
+- **Последний коммит:** `62dd95b` (feat(core): implement topology validator and complete Phase 1)
 
 ## Что сделано
 - **Фаза 1 полностью завершена:**
