@@ -1,27 +1,33 @@
 # HANDOFF — Оперативный статус проекта
 
-- **Последнее обновление:** завершён пункт 1.2 (чистые операции над графом, авторазбиение проводов junction dots, экстрактор электрических узлов)
+- **Последнее обновление:** завершён пункт 1.3 (ортогональный Manhattan-маршрутизатор проводов A*, система Undo/Redo на паттерне Command)
 - **Текущая фаза:** Фаза 1 — Ядро схемы и графа (`packages/core`)
-- **Последний коммит:** `d81650c` (feat(core): implement pure circuit graph operations, junction splitting, and net extractor (Phase 1.2))
+- **Последний коммит:** —
 
 ## Что сделано
-- Реализованы чистые операции графа в `packages/core/src/graph`:
-  - `geometry-utils.ts`: проверка попадания точки на ортогональный сегмент, упрощение полилиний, манхэттенское расстояние.
-  - `circuit-graph.ts`: класс `CircuitGraph` (CRUD компонентов, перемещение с автосдвигом выводов проводов, поворот на 90°, удаление с каскадной очисткой связей и осиротевших узлов).
-  - **Авторазбиение проводов (junction dot):** методы `splitWireAt` и `connectToWireAt` разбивают провод на 2 сегмента и вставляют `Junction` при Т-образном подключении.
-  - `net-extractor.ts`: `NetExtractor.extractNets` (BFS/компоненты связности) детерминированно извлекает эквипотенциальные узлы (`0` для земли, `N001`, `N002`... для остальных).
-- Добавлены тесты (12 новых тестов): `graph-operations.test.ts`, `wire-splitting.test.ts`, `net-extractor.test.ts`.
+- **Manhattan Router (`packages/core/src/router`):**
+  - Алгоритм A* поиска ортогональных путей на дискретной сетке с бинарной кучей `MinHeap`.
+  - Штрафы за изгибы (минимизация числа поворотов L/Z-трасс).
+  - Огибание габаритов компонентов как физических препятствий на монтажном поле.
+- **Undo/Redo & Command Pattern (`packages/core/src/commands`):**
+  - Интерфейс `Command` и стек `CommandManager` с поддержкой лимита истории, `canUndo`/`canRedo`.
+  - Реализованы команды: `AddComponentCommand`, `RemoveComponentCommand` (с каскадным восстановлением связей), `MoveComponentCommand`, `RotateComponentCommand`, `UpdateComponentParamsCommand`, `ConnectWireCommand`, `RemoveWireCommand`, `SplitWireCommand`, `BatchCommand`.
+- **Тестирование:**
+  - Добавлены тесты `manhattan-router.test.ts` и `command-manager.test.ts` (14 новых тестов).
 
 ## Состояние проверок
 - `typecheck`: пройден (`tsc --noEmit` во всех 4 пакетах)
 - `lint`: пройден (`eslint .`)
-- `test`: пройден (`vitest run` — 10 тестовых файлов, **48/48 tests passing**)
+- `test`: пройден (`vitest run` — 12 тестовых файлов, **62/62 tests passing**)
 
 ## Известные проблемы и нюансы
-- При перемещении детали крайние точки проводов сдвигаются синхронно с пинами; полноценный A* перетрассировщик геометрии проводов реализуется на следующем шаге 1.3.
+- Маршрутизатор по умолчанию резервирует габариты $\pm 1$ вокруг центра деталей; при плотной компоновке можно передавать `ignoredComponentIds`.
 
 ## Следующий шаг
-Выполнить **Пункт 1.3** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L25-L26)):
-1. Реализовать ортогональный маршрутизатор проводов (Manhattan routing по целочисленной сетке с обходом габаритов компонентов и других проводов).
-2. Реализовать стек Undo/Redo на базе паттерна Command (`CircuitCommand`, `AddCommand`, `MoveCommand`, `RemoveCommand`, `ConnectCommand`).
-3. Покрыть тестами в Vitest.
+Выполнить **Пункт 1.4** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L27-L29)):
+1. Реализовать валидатор топологии `TopologyValidator` в `packages/core/src/validator`:
+   - `FLOATING_NODE` (висячие узлы и неподключённые пины)
+   - `NO_GROUND` (отсутствие обязательного опорного узла земли)
+   - `VOLTAGE_SOURCE_LOOP` (параллельное короткое замыкание источников напряжения)
+   - `NO_DC_PATH_TO_GROUND` (узлы, изолированные по постоянному току)
+2. Покрыть эталонными негативными и позитивными тестами Vitest. Завершить Фазу 1.
