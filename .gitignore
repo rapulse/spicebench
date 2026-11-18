@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts & compiled output
+dist/
+build/
+out/
+release/
+*.tsbuildinfo
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# Caches & temporary files
+.cache/
+.turbo/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Heavy binaries, packages & archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.dmg
+*.exe
+*.msi
+*.pkg
+*.app/
+*.deb
+*.rpm
+*.iso
+
+# OS & Editor files
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json

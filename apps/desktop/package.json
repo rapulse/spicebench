@@ -1,0 +1,18 @@
+{
+  "name": "@spicebench/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@spicebench/core": "workspace:*",
+    "@spicebench/mcp": "workspace:*",
+    "@spicebench/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
