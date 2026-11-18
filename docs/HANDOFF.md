@@ -2,7 +2,7 @@
 
 - **Последнее обновление:** завершён пункт 1.2 (чистые операции над графом, авторазбиение проводов junction dots, экстрактор электрических узлов)
 - **Текущая фаза:** Фаза 1 — Ядро схемы и графа (`packages/core`)
-- **Последний коммит:** —
+- **Последний коммит:** `d81650c` (feat(core): implement pure circuit graph operations, junction splitting, and net extractor (Phase 1.2))
 
 ## Что сделано
 - Реализованы чистые операции графа в `packages/core/src/graph`:
