@@ -6,8 +6,7 @@ import {
   Component,
 } from "@spicebench/core";
 import { getModelDefinition } from "./models";
-
-export type SimulationMode = "op" | "tran" | "ac" | "dc";
+import { SimulationMode } from "../parser/types";
 
 export interface TranOptions {
   tstep?: string;
@@ -181,7 +180,7 @@ export class NetlistCompiler {
       case "AC_VOLTAGE_SOURCE": {
         const nPos = getNode(comp.id, "pos");
         const nNeg = getNode(comp.id, "neg");
-        const vVal = parseEngineeringValue(comp.params["voltage"] ?? "120V");
+        const vVal = parseEngineeringValue(comp.params["voltage"] ?? comp.params["amplitude"] ?? "120V");
         const fVal = parseEngineeringValue(comp.params["frequency"] ?? "60Hz");
         lines.push(
           `V_${comp.id} ${nPos} ${nNeg} SIN(0 ${vVal.spiceValue} ${fVal.spiceValue}) AC ${vVal.spiceValue}`,
