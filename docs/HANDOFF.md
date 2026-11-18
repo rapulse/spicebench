@@ -2,7 +2,7 @@
 
 - **Последнее обновление:** завершён пункт 1.3 (ортогональный Manhattan-маршрутизатор проводов A*, система Undo/Redo на паттерне Command)
 - **Текущая фаза:** Фаза 1 — Ядро схемы и графа (`packages/core`)
-- **Последний коммит:** —
+- **Последний коммит:** `42e05aa` (feat(core): implement orthogonal Manhattan router and Undo/Redo command stack (Phase 1.3))
 
 ## Что сделано
 - **Manhattan Router (`packages/core/src/router`):**
