@@ -1,28 +1,33 @@
 # HANDOFF — Оперативный статус проекта
 
-- **Последнее обновление:** завершена Фаза 0 (каркас монорепозитория и CI)
+- **Последнее обновление:** завершён пункт 1.1 (Zod-схема схемы цепи, каталог компонентов, парсер инженерных единиц)
 - **Текущая фаза:** Фаза 1 — Ядро схемы и графа (`packages/core`)
-- **Последний коммит:** `c16f02e` (feat(repo): initialize monorepo scaffold (Phase 0))
+- **Последний коммит:** —
 
 ## Что сделано
-- Развернут `pnpm`-монорепозиторий (`packages/core`, `packages/sim`, `packages/mcp`, `apps/desktop`).
-- Настроен строгий TypeScript (`tsconfig.base.json`), ESLint 9 (Flat Config), Prettier, Vitest.
-- Добавлен GitHub Actions workflow (`.github/workflows/ci.yml`).
-- Настроен `.gitignore` (исключены архивы, бинарники, системные файлы и кэши).
-- Инициализирован git-репозиторий, зафиксирован базовый коммит.
+- Реализована Zod-схема проекта в `packages/core/src/schema`:
+  - `geometry.ts`: целочисленная сетка `Position`, поворот `Rotation` (0, 90, 180, 270), `rotatePoint`.
+  - `units.ts`: парсер инженерных величин `parseEngineeringValue` (с защитой от путаницы милли/мега в SPICE: `10M` -> `10meg`).
+  - `component-types.ts`: каталог из 21 типа компонентов EWB с точными смещениями пинов.
+  - `component.ts`: схема компонента, расчёт абсолютных координат пинов с учётом поворота.
+  - `wire.ts`: схема проводов, точки-узлы (`junctions`), проверка ортогональности.
+  - `instrument.ts`: состояние мультиметра, функционального генератора, осциллографа и плоттера Боде.
+  - `circuit.ts`: каноническая модель `.ewb.json`, сериализация и валидация.
+- Покрыто 36 тестами (`geometry`, `units`, `circuit-schema`).
+- Актуализирована спецификация в `docs/wiki/circuit-schema.md`.
 
 ## Состояние проверок
-- `typecheck`: пройден (`tsc --noEmit` во всех пакетах)
+- `typecheck`: пройден (`tsc --noEmit` во всех 4 пакетах)
 - `lint`: пройден (`eslint .`)
-- `test`: пройден (`vitest run` — 4/4 passing)
+- `test`: пройден (`vitest run` — 7 файлов, 36 тестов passing)
 
 ## Известные проблемы и нюансы
-- В pnpm v11+ нативные сборки управляются через `allowBuilds` в `pnpm-workspace.yaml`. Зафиксирован `esbuild: true`.
-- Прямой вызов `/usr/bin/git` на macOS блокируется песочницей из-за шима xcode-select; используется бинарник из `/Library/Developer/CommandLineTools/usr/bin/git`.
+- В SPICE `m` = милли, поэтому любые значения в Mega ($10^6$) в netlist экспортируются со строгим суффиксом `meg`.
 
 ## Следующий шаг
-Выполнить **Пункт 1.1** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L20-L21)):
-1. Описать доменные схемы цепи на Zod в `packages/core/src/schema`:
-   - типы элементов, пины, номиналы, провода, точки-узлы (junction dots), приборы.
-2. Реализовать парсер номиналов со шкалами (инженерная нотация `10k`, `100u`, `1meg`).
-3. Покрыть тестами и актуализировать `docs/wiki/circuit-schema.md`.
+Выполнить **Пункт 1.2** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L22-L24)):
+Реализовать чистые операции над графом в `packages/core/src/graph`:
+1. `CircuitGraph` / мутации: добавление, перемещение, поворот на 90°, удаление компонентов с очисткой связанных проводов.
+2. Подключение провода между пинами/узлами.
+3. Авторазбиение сегмента провода при Т-образном подключении с постановкой точки-узла (`junction dot`).
+4. Покрытие тестами в Vitest.
