@@ -2,7 +2,7 @@
 
 - **Последнее обновление:** завершён пункт 2.1 (транслятор схемы в SPICE-нетлист NetlistCompiler в `packages/sim`)
 - **Текущая фаза:** Фаза 2 — Генератор SPICE и симулятор (`packages/sim`)
-- **Последний коммит:** —
+- **Последний коммит:** `719ac5d` (feat(sim): implement SPICE netlist compiler and model definitions (Phase 2.1))
 
 ## Что сделано
 - **Транслятор в SPICE-нетлист (`packages/sim/src/compiler`):**
