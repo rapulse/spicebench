@@ -52,11 +52,15 @@ export const STANDARD_SUBCIRCUITS: Record<string, string> = {
     "R1 vcc ctrl 5k",
     "R2 ctrl v2 5k",
     "R3 v2 gnd 5k",
-    "B_th v_th 0 V=V(thresh) > V(ctrl) ? 1 : 0",
-    "B_tr v_tr 0 V=V(trig) < V(v2) ? 1 : 0",
-    "B_out out gnd V=V(reset) < 0.7 ? 0 : (V(v_tr) > 0.5 ? (V(vcc)-1.5) : (V(v_th) > 0.5 ? 0.1 : 0.1))",
-    "R_out out gnd 10k",
-    "Q_disch disch v_th gnd 2N3904",
+    // RS latch: trigger (< 1/3 Vcc) sets, threshold (> ctrl = 2/3 Vcc) resets, hold otherwise.
+    // State q is delayed by R_q*C_q = 10 ns so the feedback is causal in .tran.
+    // An astable 555 has no DC operating point; .tran with 555 is compiled with `uic` (ADR-009).
+    "B_latch qd gnd V=V(reset,gnd) < 0.7 ? 0 : (V(trig,gnd) < V(v2,gnd) ? 1 : (V(thresh,gnd) > V(ctrl,gnd) ? 0 : (V(q,gnd) > 0.5 ? 1 : 0)))",
+    "R_q qd q 1k",
+    "C_q q gnd 10p",
+    "B_out out gnd V=V(q,gnd) > 0.5 ? max(V(vcc,gnd)-1.7, 0) : 0.1",
+    // Discharge switch: ~10 Ohm to gnd while the latch is reset.
+    "B_dis disch gnd I=V(q,gnd) < 0.5 ? V(disch,gnd)/10 : 0",
     ".ends TIMER_555",
   ].join("\n"),
 

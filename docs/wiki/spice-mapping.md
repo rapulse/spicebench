@@ -86,3 +86,4 @@
   ngspice, в том числе пропущенные строки «... ignored!»), `SIMULATION_TIMEOUT`, `ENGINE_ERROR`,
   `PARSE_ERROR`. Нефатальные сообщения (`Note: ... DC 0 assumed`) попадают в `SimulationResult.warnings`.
 * XSPICE code models недоступны (ADR-008).
+* Если в схеме есть `TIMER_555`, `.tran` компилируется с `uic`, если `tran.uic` не задан явно (ADR-009).

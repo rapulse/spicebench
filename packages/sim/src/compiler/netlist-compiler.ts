@@ -323,7 +323,6 @@ export class NetlistCompiler {
         const nDisch = getNode(comp.id, "disch");
         const nVcc = getNode(comp.id, "vcc");
         usedSubcircuits.add("TIMER_555");
-        usedModels.add("2N3904");
         lines.push(
           `X_${comp.id} ${nGnd} ${nTrig} ${nOut} ${nReset} ${nCtrl} ${nThresh} ${nDisch} ${nVcc} TIMER_555`,
         );
@@ -498,22 +497,26 @@ export class NetlistCompiler {
   private static buildAnalysisDirective(
     mode: SimulationMode,
     options: SimulationOptions,
-    _graph: CircuitGraph,
+    graph: CircuitGraph,
   ): string {
     switch (mode) {
       case "op":
         return ".op";
 
       case "tran": {
+        // Oscillators built on the 555 macromodel have no DC operating point:
+        // start them from zero initial conditions unless the caller decided explicitly (ADR-009).
+        const has555 = graph.getAllComponents().some((c) => c.type === "TIMER_555");
+        const uicFlag = options.tran?.uic ?? has555;
+        const uic = uicFlag ? " uic" : "";
         if (options.tran) {
           const tstep = options.tran.tstep ?? "10u";
           const tstop = options.tran.tstop;
           const tstart = options.tran.tstart ? ` ${options.tran.tstart}` : "";
-          const uic = options.tran.uic ? " uic" : "";
           return `.tran ${tstep} ${tstop}${tstart}${uic}`;
         }
         // Default transient parameters based on components
-        return ".tran 10u 10m";
+        return `.tran 10u 10m${uic}`;
       }
 
       case "ac": {

@@ -164,6 +164,61 @@ describe("Golden Fixtures: nonlinear devices on ngspice", () => {
     }
   });
 
+  it("Fixture 11: 555 astable oscillates at f = 1/(ln2·(RA+2RB)·C)", async () => {
+    // Vcc=5 V, RA=1k, RB=10k, C=10n -> f = 6870 Hz, duty = (RA+RB)/(RA+2RB) = 0.524
+    const g = build(
+      [
+        ["DC_VOLTAGE_SOURCE", "VCC", { voltage: "5V" }],
+        ["RESISTOR", "RA", { resistance: "1k" }],
+        ["RESISTOR", "RB", { resistance: "10k" }],
+        ["CAPACITOR", "C1", { capacitance: "10n" }],
+        ["CAPACITOR", "CC", { capacitance: "10n" }],
+        ["RESISTOR", "RL", { resistance: "10k" }],
+        ["TIMER_555", "U1"],
+        ["GROUND", "GND1"],
+      ],
+      [
+        [["VCC", "neg"], ["GND1", "0"]],
+        [["U1", "gnd"], ["GND1", "0"]],
+        [["VCC", "pos"], ["U1", "vcc"]],
+        [["VCC", "pos"], ["U1", "reset"]],
+        [["VCC", "pos"], ["RA", "1"]],
+        [["RA", "2"], ["U1", "disch"]],
+        [["U1", "disch"], ["RB", "1"]],
+        [["RB", "2"], ["U1", "thresh"]],
+        [["U1", "thresh"], ["U1", "trig"]],
+        [["U1", "thresh"], ["C1", "1"]],
+        [["C1", "2"], ["GND1", "0"]],
+        [["U1", "ctrl"], ["CC", "1"]],
+        [["CC", "2"], ["GND1", "0"]],
+        [["U1", "out"], ["RL", "1"]],
+        [["RL", "2"], ["GND1", "0"]],
+      ],
+    );
+    // No explicit uic: the compiler must add it for 555 circuits (ADR-009).
+    const compiled = NetlistCompiler.compile(g, { mode: "tran", tran: { tstep: "1u", tstop: "3m" } });
+    expect(compiled.netlist).toMatch(/^\.tran 1u 3m uic$/m);
+
+    const tran = (await runner.run(compiled.netlist)).data as TranResult;
+    const v = tran.variables[`v(${compiled.nodeMap.get("U1:out")!.toLowerCase()})`]!;
+    const t = tran.time;
+    const rises: number[] = [];
+    const falls: number[] = [];
+    for (let i = 1; i < t.length; i++) {
+      if (v[i - 1]! < 1.7 && v[i]! >= 1.7) rises.push(t[i]!);
+      if (v[i - 1]! >= 1.7 && v[i]! < 1.7) falls.push(t[i]!);
+    }
+    const steady = rises.slice(2); // skip the first, longer charge from 0 V
+    expect(steady.length).toBeGreaterThan(10);
+    const period = (steady.at(-1)! - steady[0]!) / (steady.length - 1);
+    const fExpected = 1 / (Math.LN2 * 21e3 * 10e-9);
+    expect(Math.abs(1 / period - fExpected) / fExpected).toBeLessThan(0.03);
+
+    const rise = steady.at(-2)!;
+    const fall = falls.find((f) => f > rise)!;
+    expect(Math.abs((fall - rise) / period - 11 / 21)).toBeLessThan(0.02);
+  });
+
   it("Fixture 10: logic macromodels follow their truth tables", async () => {
     const table: Record<string, (a: boolean, b: boolean) => boolean> = {
       AND_GATE: (a, b) => a && b,
