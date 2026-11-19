@@ -42,12 +42,12 @@
 заданной погрешности; ошибки `ngspice` возвращаются структурированно с привязкой к ID элементов.
 
 ## Фаза 3. Автономный MCP-сервер (`packages/mcp`)
-- [ ] **3.1.** Подключить `@modelcontextprotocol/sdk` и реализовать запуск в режимах `stdio` и 
+- [x] **3.1.** Подключить `@modelcontextprotocol/sdk` и реализовать запуск в режимах `stdio` и 
 локального Streamable HTTP.
-- [ ] **3.2.** Реализовать базовые инструменты: `get_circuit_state`, `place_component`, 
+- [x] **3.2.** Реализовать базовые инструменты: `get_circuit_state`, `place_component`, 
 `update_component`, `remove_component`, `connect_pins`, `validate_circuit`, `run_simulation`, 
 `read_instrument`.
-- [ ] **3.3.** Актуализировать контракты в `docs/wiki/mcp-tools.md` и написать интеграционный 
+- [x] **3.3.** Актуализировать контракты в `docs/wiki/mcp-tools.md` и написать интеграционный 
 тест сценария «собрать делитель -> провалидировать -> просимулировать -> получить напряжения».
 - **Критерий готовности:** внешний MCP-клиент (Cursor, Claude Desktop или MCP Inspector) без 
 запуска GUI собирает схему и получает точные расчётные данные.

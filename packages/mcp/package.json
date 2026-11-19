@@ -4,6 +4,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "bin": {
+    "spicebench-mcp": "./dist/cli.js"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc"
