@@ -3,7 +3,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DESKTOP_VERSION } from "../src/index";
 import { SchematicSymbol } from "../src/components/SchematicSymbol";
-import type { Component, ComponentType } from "@spicebench/core";
+import { Canvas } from "../src/components/Canvas";
+import type { Component, ComponentType, CircuitProject } from "@spicebench/core";
 import type { SpicebenchApi } from "../src/types/ipc";
 
 describe("Desktop Package", () => {
@@ -53,7 +54,6 @@ describe("Desktop Package", () => {
 
         expect(markup).toContain("<g");
         expect(markup).toContain(`id="symbol-TEST_${type}"`);
-        // Verify component label or value is rendered
         expect(markup).toContain(`TEST_${type}`);
       }
     });
@@ -76,24 +76,101 @@ describe("Desktop Package", () => {
     });
   });
 
+  describe("Canvas Interactive Editor (Phase 5.1)", () => {
+    const mockCircuit: CircuitProject = {
+      schemaVersion: 1,
+      meta: { name: "Test Circuit", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
+      components: [
+        {
+          id: "R1",
+          type: "RESISTOR",
+          label: "R1",
+          position: { x: 10, y: 10 },
+          rotation: 0,
+          params: { resistance: "10k" },
+        },
+        {
+          id: "C1",
+          type: "CAPACITOR",
+          label: "C1",
+          position: { x: 20, y: 10 },
+          rotation: 90,
+          params: { capacitance: "1uF" },
+        },
+      ],
+      wires: [
+        {
+          id: "W1",
+          from: { componentId: "R1", pinId: "2" },
+          to: { componentId: "C1", pinId: "1" },
+          points: [
+            { x: 12, y: 10 },
+            { x: 20, y: 8 },
+          ],
+        },
+      ],
+      junctions: [{ id: "J1", position: { x: 16, y: 10 } }],
+      instruments: [],
+    };
+
+    it("renders components, wires, and junctions with selection state", () => {
+      const markup = renderToStaticMarkup(
+        React.createElement(Canvas, {
+          circuit: mockCircuit,
+          simulation: null,
+          selectedIds: ["R1"],
+          onSelect: () => {},
+          onCursorMove: () => {},
+          onDropComponent: () => {},
+          onMoveComponent: () => {},
+        })
+      );
+
+      // Verify grid pattern, components, and wire are rendered
+      expect(markup).toContain('id="ewb-grid-pattern"');
+      expect(markup).toContain('id="symbol-R1"');
+      expect(markup).toContain('id="symbol-C1"');
+      // R1 is selected -> stroke blue
+      expect(markup).toContain('stroke="#0000ff"');
+    });
+
+    it("calculates +90 rotation sequence correctly for all 4 orientations", () => {
+      const getNextRotation = (rot: number) => ((rot + 90) % 360);
+      expect(getNextRotation(0)).toBe(90);
+      expect(getNextRotation(90)).toBe(180);
+      expect(getNextRotation(180)).toBe(270);
+      expect(getNextRotation(270)).toBe(0);
+    });
+
+    it("snaps continuous pixel offsets to discrete 20px grid increments", () => {
+      const GRID_SPACING = 20;
+      const snapToGrid = (px: number) => Math.round(px / GRID_SPACING);
+
+      expect(snapToGrid(0)).toBe(0);
+      expect(snapToGrid(9)).toBe(0);
+      expect(snapToGrid(11)).toBe(1);
+      expect(snapToGrid(20)).toBe(1);
+      expect(snapToGrid(35)).toBe(2);
+      expect(snapToGrid(-19)).toBe(-1);
+    });
+  });
+
   describe("SpicebenchApi IPC Contract Definition", () => {
     it("matches expected method signatures in typed contract", () => {
-      // Mocking an implementation of SpicebenchApi to verify full interface conformance
       const mockApi: SpicebenchApi = {
         getCircuit: async () => ({
           schemaVersion: 1,
-          id: "test",
-          name: "Test Circuit",
-          metadata: { createdAt: 0, updatedAt: 0 },
+          meta: { name: "Test Circuit", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
           components: [],
           wires: [],
           junctions: [],
+          instruments: [],
         }),
         getStats: async () => ({
-          componentsCount: 0,
-          wiresCount: 0,
-          junctionsCount: 0,
-          componentsByType: {},
+          componentCount: 0,
+          wireCount: 0,
+          junctionCount: 0,
+          instrumentCount: 0,
         }),
         placeComponent: async (opts) => ({
           id: opts.id || "C1",
@@ -119,28 +196,27 @@ describe("Desktop Package", () => {
           id: "W1",
           from: { componentId: "R1", pinId: "1" },
           to: { componentId: "R2", pinId: "1" },
-          segments: [],
+          points: [],
         }),
         validateCircuit: async () => ({
-          valid: true,
+          isValid: true,
           errors: [],
           warnings: [],
         }),
         runSimulation: async () => ({
-          analysisType: "OP",
-          nodeVoltages: {},
-          timestamp: Date.now(),
+          mode: "op",
+          success: true,
+          durationMs: 10,
         }),
         setPower: async () => null,
         resetCircuit: async () => {},
         loadSampleCircuit: async () => ({
           schemaVersion: 1,
-          id: "sample",
-          name: "Sample",
-          metadata: { createdAt: 0, updatedAt: 0 },
+          meta: { name: "Sample", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
           components: [],
           wires: [],
           junctions: [],
+          instruments: [],
         }),
         onCircuitUpdated: () => () => {},
         onSimulationUpdated: () => () => {},

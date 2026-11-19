@@ -7,6 +7,7 @@ interface ToolBarProps {
   onValidate: () => void;
   onSimulate: () => void;
   onRotate?: () => void;
+  onDelete?: () => void;
 }
 
 export const ToolBar: React.FC<ToolBarProps> = ({
@@ -15,6 +16,8 @@ export const ToolBar: React.FC<ToolBarProps> = ({
   onNew,
   onValidate,
   onSimulate,
+  onRotate,
+  onDelete,
 }) => {
   return (
     <div className="ewb-toolbar">
@@ -44,8 +47,11 @@ export const ToolBar: React.FC<ToolBarProps> = ({
 
         <div className="ewb-tool-divider" />
 
-        <button className="ewb-tool-btn" title="Rotate (Ctrl+R)">
+        <button className="ewb-tool-btn" title="Rotate (Ctrl+R)" onClick={onRotate}>
           🔄
+        </button>
+        <button className="ewb-tool-btn" title="Delete (Del)" onClick={onDelete}>
+          🗑️
         </button>
         <button className="ewb-tool-btn" title="Validate Topology" onClick={onValidate}>
           ✔️ Check

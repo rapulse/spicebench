@@ -10,6 +10,7 @@ import {
   getAbsolutePinPosition,
   getComponentPin,
   ManhattanRouter,
+  isPinEndpoint,
   TopologyValidator,
   ValidationResult,
   ValidationDiagnostic,
@@ -188,7 +189,43 @@ export class CircuitSession {
     }
 
     this.isDirty = true;
-    return this.graph.updateComponent(id, updates);
+    const updated = this.graph.updateComponent(id, updates);
+
+    // If position or rotation changed, re-route connected wires orthogonally
+    if (updates.position !== undefined || updates.rotation !== undefined) {
+      this.rerouteWiresForComponent(id);
+    }
+
+    return updated;
+  }
+
+  private rerouteWiresForComponent(componentId: string): void {
+    const allWires = this.graph.getAllWires();
+    for (const wire of allWires) {
+      const isFromConnected = isPinEndpoint(wire.from) && wire.from.componentId === componentId;
+      const isToConnected = isPinEndpoint(wire.to) && wire.to.componentId === componentId;
+      if (isFromConnected || isToConnected) {
+        try {
+          const startPos = this.graph.getEndpointPosition(wire.from);
+          const endPos = this.graph.getEndpointPosition(wire.to);
+          const ignored = [
+            isPinEndpoint(wire.from) ? wire.from.componentId : "",
+            isPinEndpoint(wire.to) ? wire.to.componentId : "",
+          ].filter(Boolean);
+
+          const route = ManhattanRouter.route(startPos, endPos, this.graph, {
+            margin: 5,
+            avoidComponents: true,
+            ignoredComponentIds: ignored,
+          });
+          if (route && route.length >= 2) {
+            wire.points = route;
+          }
+        } catch {
+          // If automatic routing fails, existing terminal points are maintained by graph
+        }
+      }
+    }
   }
 
   public removeComponent(id: string): { removedComponentId: string; removedWireCount: number } {

@@ -67,7 +67,13 @@ export const PartsBin: React.FC<PartsBinProps> = ({ onSelectComponent }) => {
           <div
             key={part.type}
             className="ewb-part-item"
-            title={`Click to place ${part.label}`}
+            title={`Drag to schematic or click to place: ${part.label}`}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData("application/spicebench-component", part.type);
+              e.dataTransfer.setData("text/plain", part.type);
+              e.dataTransfer.effectAllowed = "copy";
+            }}
             onClick={() => onSelectComponent(part.type)}
           >
             <span style={{ fontSize: "14px", lineHeight: 1 }}>{part.icon}</span>

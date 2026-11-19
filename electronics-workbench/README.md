@@ -1,6 +1,9 @@
 # Референсные скриншоты Electronics Workbench (EWB 5.12)
 
-В этой директории собраны оригинальные скриншоты оригинальной программы **Electronics Workbench (Interactive Image Technologies / EWB 5.12)** в среде Windows 95/98 для визуальной калибровки интерфейса, диалоговых окон, полок деталей и виртуальных приборов.
+В этой директории собраны оригинальные скриншоты оригинальной программы **Electronics Workbench (Interactive Image Technologies / EWB 5.12)** в среде Windows для визуальной калибровки интерфейса, диалоговых окон, полок деталей и виртуальных приборов.
+
+> [!IMPORTANT]
+> **Главный эталон (Golden Reference):** фото [IMG_6708.jpg](file:///Users/master/Projects/spicebench/electronics-workbench/IMG_6708.jpg) — реальный интерфейс Workbench с активной схемой переменного тока (источник V1 `10 В 10 кГц`, амперметр M1 `~ RMS`, конденсатор C1 `160 нФ`, вольтметр M2 `~ RMS`, земля, панель тумблера `0 / 1` и `Пауза`). Все элементы интерфейса, полки и компоновка выравниваются строго по нему.
 
 ---
 
@@ -8,6 +11,7 @@
 
 | Файл | Описание | Размер |
 |---|---|---|
+| [IMG_6708.jpg](file:///Users/master/Projects/spicebench/electronics-workbench/IMG_6708.jpg) | **Главный эталон:** реальный запуск Workbench, схема с амперметром/вольтметром, полки и тумблер | 3.7 MB |
 | [ewb_screenshot_01.png](file:///Users/master/Projects/spicebench/electronics-workbench/ewb_screenshot_01.png) | Главное окно Electronics Workbench 5.12 с полками деталей и схемой | 55 KB |
 | [ewb_screenshot_02.png](file:///Users/master/Projects/spicebench/electronics-workbench/ewb_screenshot_02.png) | Рабочая область EWB со схемой и подключёнными приборами | 12 KB |
 | [ewb_screenshot_03.jpg](file:///Users/master/Projects/spicebench/electronics-workbench/ewb_screenshot_03.jpg) | Схема с двухканальным осциллографом и генератором сигналов | 75 KB |

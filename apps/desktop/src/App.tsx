@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import type { CircuitProject, ComponentType } from "@spicebench/core";
+import React, { useState, useEffect, useCallback } from "react";
+import type { CircuitProject, ComponentType, Rotation } from "@spicebench/core";
 import { CURRENT_SCHEMA_VERSION } from "@spicebench/core";
 import type { CircuitStats, SimulationSummary } from "@spicebench/mcp";
 import { TitleBar } from "./components/TitleBar";
@@ -32,9 +32,18 @@ export const App: React.FC = () => {
   });
   const [simulation, setSimulation] = useState<SimulationSummary | null>(null);
   const [powerOn, setPowerOn] = useState<boolean>(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [statusText, setStatusText] = useState<string>("Ready");
+
+  const updateStats = (c: CircuitProject) => {
+    setStats({
+      componentCount: c.components.length,
+      wireCount: c.wires.length,
+      junctionCount: c.junctions.length,
+      instrumentCount: c.instruments.length,
+    });
+  };
 
   // Initial load from Electron Main
   useEffect(() => {
@@ -67,15 +76,6 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  const updateStats = (c: CircuitProject) => {
-    setStats({
-      componentCount: c.components.length,
-      wireCount: c.wires.length,
-      junctionCount: c.junctions.length,
-      instrumentCount: c.instruments.length,
-    });
-  };
-
   const handleTogglePower = async () => {
     const nextPower = !powerOn;
     setPowerOn(nextPower);
@@ -99,6 +99,7 @@ export const App: React.FC = () => {
   const handleNewCircuit = async () => {
     if (window.spicebenchApi) {
       await window.spicebenchApi.resetCircuit();
+      setSelectedIds([]);
       setPowerOn(false);
       setSimulation(null);
       setStatusText("New circuit created");
@@ -110,6 +111,7 @@ export const App: React.FC = () => {
       const c = await window.spicebenchApi.loadSampleCircuit(sampleName);
       setCircuit(c);
       updateStats(c);
+      setSelectedIds([]);
       setPowerOn(false);
       setSimulation(null);
       setStatusText(`Loaded sample: ${sampleName}`);
@@ -153,13 +155,112 @@ export const App: React.FC = () => {
           x: posX,
           y: posY,
         });
-        setSelectedId(comp.id);
+        setSelectedIds([comp.id]);
         setStatusText(`Placed ${comp.type} '${comp.id}' at (${posX}, ${posY})`);
       } catch (err) {
         setStatusText(`Error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   };
+
+  const handleDropComponent = async (type: ComponentType, gridPos: { x: number; y: number }) => {
+    if (window.spicebenchApi) {
+      try {
+        const comp = await window.spicebenchApi.placeComponent({
+          type,
+          x: gridPos.x,
+          y: gridPos.y,
+        });
+        setSelectedIds([comp.id]);
+        setStatusText(`Placed ${comp.type} '${comp.id}' at (${gridPos.x}, ${gridPos.y})`);
+      } catch (err) {
+        setStatusText(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  };
+
+  const handleMoveComponent = async (id: string, newPos: { x: number; y: number }) => {
+    if (window.spicebenchApi) {
+      try {
+        await window.spicebenchApi.updateComponent({
+          id,
+          x: newPos.x,
+          y: newPos.y,
+        });
+        setStatusText(`Moved '${id}' to (${newPos.x}, ${newPos.y})`);
+      } catch (err) {
+        setStatusText(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  };
+
+  const handleRotate = useCallback(async () => {
+    if (window.spicebenchApi && selectedIds.length > 0) {
+      let rotatedCount = 0;
+      for (const id of selectedIds) {
+        const comp = circuit.components.find((c) => c.id === id);
+        if (comp) {
+          const nextRotation = (((comp.rotation || 0) + 90) % 360) as Rotation;
+          await window.spicebenchApi.updateComponent({
+            id,
+            rotation: nextRotation,
+          });
+          rotatedCount++;
+        }
+      }
+      if (rotatedCount > 0) {
+        setStatusText(`Rotated ${rotatedCount} component(s) +90°`);
+      }
+    }
+  }, [circuit.components, selectedIds]);
+
+  const handleDelete = useCallback(async () => {
+    if (window.spicebenchApi && selectedIds.length > 0) {
+      const count = selectedIds.length;
+      for (const id of selectedIds) {
+        try {
+          await window.spicebenchApi.removeComponent(id);
+        } catch {
+          // May be an already removed element or wire
+        }
+      }
+      setSelectedIds([]);
+      setStatusText(`Deleted ${count} element(s)`);
+    }
+  }, [selectedIds]);
+
+  const handleSelectAll = useCallback(() => {
+    const allIds = circuit.components.map((c) => c.id);
+    setSelectedIds(allIds);
+    setStatusText(`Selected all ${allIds.length} component(s)`);
+  }, [circuit.components]);
+
+  // Global Keyboard Shortcuts (Ctrl+R / Cmd+R to rotate, Del / Backspace to delete, Ctrl+A to select all, Esc to deselect)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput =
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement;
+      if (isInput) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        handleRotate();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        handleDelete();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        handleSelectAll();
+      } else if (e.key === "Escape") {
+        setSelectedIds([]);
+        setStatusText("Selection cleared");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleRotate, handleDelete, handleSelectAll]);
 
   return (
     <div className="ewb-window window">
@@ -172,6 +273,9 @@ export const App: React.FC = () => {
         onOpenSample={handleOpenSample}
         onValidate={handleValidate}
         onSimulate={handleSimulate}
+        onRotate={handleRotate}
+        onDelete={handleDelete}
+        onSelectAll={handleSelectAll}
       />
 
       {/* 3. Main ToolBar + Power Rocker Switch */}
@@ -181,6 +285,8 @@ export const App: React.FC = () => {
         onNew={handleNewCircuit}
         onValidate={handleValidate}
         onSimulate={handleSimulate}
+        onRotate={handleRotate}
+        onDelete={handleDelete}
       />
 
       {/* 4. Parts Bin Shelf */}
@@ -190,9 +296,11 @@ export const App: React.FC = () => {
       <Canvas
         circuit={circuit}
         simulation={simulation}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
+        selectedIds={selectedIds}
+        onSelect={setSelectedIds}
         onCursorMove={setCursorPos}
+        onDropComponent={handleDropComponent}
+        onMoveComponent={handleMoveComponent}
       />
 
       {/* 6. Win95 Status Bar */}

@@ -1,35 +1,35 @@
 # HANDOFF — Оперативный статус проекта
 
-- **Последнее обновление:** полностью завершена Фаза 4 (Оболочка Electron, Win95 UI, SVG-холст)
+- **Последнее обновление:** завершён шаг 5.1 (Интерактивное размещение, drag-and-drop, выделение, поворот, удаление)
 - **Текущая фаза:** Фаза 5 — Интерактивный редактор схем
-- **Последний коммит:** `c8bedd4` (25 референсных скриншотов Electronics Workbench)
+- **Главный визуальный эталон:** [IMG_6708.jpg](file:///Users/master/Projects/spicebench/electronics-workbench/IMG_6708.jpg) (реальный запуск Workbench)
 
-## Что сделано в Фазе 4
-- **Архитектура Electron Main / Preload / Renderer (`apps/desktop`):**
-  - Главный процесс `electron/main.ts` держит единственный инстанс `CircuitSession` (`core` + `sim` + `mcp`).
-  - Типизированный безопасный IPC-мост `contextBridge` (`electron/preload.ts`, `src/types/ipc.ts`).
-  - Реактивное уведомление Renderer (`spicebench:circuit-updated`, `spicebench:simulation-updated`).
-- **Интерфейс в стиле Electronics Workbench 5.12 (`98.css`):**
-  - [TitleBar.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/TitleBar.tsx): ретро-заголовок Windows 95 с иконкой и кнопками минимизации/закрытия.
-  - [MenuBar.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/MenuBar.tsx): меню File, Edit, Circuit, Analysis, Help с хоткеями.
-  - [ToolBar.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/ToolBar.tsx): классический двухпозиционный тумблер питания 0/1 и красный LED-индикатор активности.
-  - [PartsBin.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/PartsBin.tsx): полки деталей по вкладкам (Sources, Basic, Diodes, Transistors, Instruments).
-  - [StatusBar.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/StatusBar.tsx): координаты курсора на сетке, статус симуляции, число компонентов и проводов.
-- **Векторный SVG-холст (`Canvas.tsx`, `SchematicSymbol.tsx`):**
-  - Точечная сетка с шагом 20px, панорамирование (Drag по холсту) и зум (колесо мыши).
-  - Схемотехнические символы для всех 21 типа компонентов.
-  - Отображение ортогональных проводов, соединительных узлов и живых бейджей напряжений при включённом питании.
-- **Тестирование и сборка:**
-  - Написаны тесты в [desktop.test.ts](file:///Users/master/Projects/spicebench/apps/desktop/tests/desktop.test.ts) (SVG-рендер символов, типизация IPC).
-  - Успешный билд Vite + Electron в `dist/` и `dist-electron/`.
+## Что сделано в шаге 5.1
+- **Drag-and-Drop деталей с полок на холст:**
+  - В [PartsBin.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/PartsBin.tsx) добавлена поддержка HTML5 drag-and-drop (`application/spicebench-component`).
+  - В [Canvas.tsx](file:///Users/master/Projects/spicebench/apps/desktop/src/components/Canvas.tsx) реализованы `onDragOver` и `onDrop` с пересчётом координат мыши в логическую сетку шагом 20px с учётом pan/zoom.
+- **Интерактивное перетаскивание компонентов по холсту:**
+  - Захват компонента левой кнопкой мыши с мгновенной отрисовкой сдвига (`dragOffset`).
+  - При отпускании мыши координата округляется до целых узлов сетки, отправляется `updateComponent` в Main.
+  - В `CircuitSession` (`circuit-session.ts`) добавлена автоперестройка подключённых проводов (`rerouteWiresForComponent`) через `ManhattanRouter`.
+- **Мультивыделение (клик и рамка):**
+  - Одиночный клик выбирает элемент, Shift+клик переключает в группе (`selectedIds`).
+  - Протягивание рамки (marquee selection) по пустому полю выделяет все компоненты, попавшие в область.
+- **Поворот и удаление:**
+  - Поворот на +90° по `Ctrl+R` / `Cmd+R` и кнопке в ToolBar/MenuBar.
+  - Удаление по `Delete` / `Backspace` и кнопке в ToolBar/MenuBar.
+  - Выделение всего по `Ctrl+A`, сброс по `Esc`.
+- **Тестирование:**
+  - Добавлены тесты в [desktop.test.ts](file:///Users/master/Projects/spicebench/apps/desktop/tests/desktop.test.ts) (рендер Canvas, логика вращения, сетка).
+  - Всего: **97 из 97 тестов пройдены**, линтер и типизация чистые.
 
 ## Состояние проверок
 - `typecheck`: пройден (`pnpm typecheck` во всех 4 пакетах)
 - `lint`: пройден (`pnpm lint` — 0 ошибок)
-- `test`: пройден (`pnpm test` — 18 тестовых файлов, **94/94 passing tests**)
+- `test`: пройден (`pnpm test` — 18 тестовых файлов, **97/97 passing tests**)
 
 ## Следующий шаг
-Перейти к **Фазе 5.1 & 5.2** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L67-L79)):
-1. Реализовать интерактивное перетаскивание деталей с полок (Parts Bin) на холст с привязкой к сетке.
-2. Выделение компонентов (клик / рамка), вращение (`Ctrl+R` / `Cmd+R`) и удаление (`Delete`).
-3. Интерактивная прокладка проводов от клеммы к клемме.
+Перейти к **Фазе 5.2** ([docs/ROADMAP.md](file:///Users/master/Projects/spicebench/docs/ROADMAP.md#L70-L72)):
+1. Реализовать интерактивную протяжку проводов от пина к пину (клик по пину -> резиновая линия -> клик по целевому пину).
+2. Подключение провода к середине другого провода с постановкой точки-узла (`Junction`).
+3. Визуальные маркеры пинов (терминалов) при наведении курсора.

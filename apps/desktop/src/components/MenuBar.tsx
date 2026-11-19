@@ -5,6 +5,9 @@ interface MenuBarProps {
   onOpenSample: (sample: "voltage-divider" | "rc-step" | "rlc-filter") => void;
   onValidate: () => void;
   onSimulate: () => void;
+  onRotate?: () => void;
+  onDelete?: () => void;
+  onSelectAll?: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -12,6 +15,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onOpenSample,
   onValidate,
   onSimulate,
+  onRotate,
+  onDelete,
+  onSelectAll,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -74,6 +80,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <span>Paste</span>
               <span>Ctrl+V</span>
             </div>
+            <div className="ewb-dropdown-divider" />
+            <div className="ewb-dropdown-item" onClick={() => { onDelete?.(); closeMenu(); }}>
+              <span>Delete</span>
+              <span>Del</span>
+            </div>
+            <div className="ewb-dropdown-item" onClick={() => { onSelectAll?.(); closeMenu(); }}>
+              <span>Select All</span>
+              <span>Ctrl+A</span>
+            </div>
           </div>
         )}
       </div>
@@ -86,7 +101,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div className="ewb-dropdown-item" onClick={() => { onValidate(); closeMenu(); }}>
               <span>Validate Topology...</span>
             </div>
-            <div className="ewb-dropdown-item" onClick={closeMenu}>
+            <div className="ewb-dropdown-item" onClick={() => { onRotate?.(); closeMenu(); }}>
               <span>Rotate 90°</span>
               <span>Ctrl+R</span>
             </div>
