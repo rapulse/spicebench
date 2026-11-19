@@ -4,6 +4,7 @@ node_modules/
 
 # Build artifacts & compiled output
 dist/
+dist-electron/
 build/
 out/
 release/

@@ -1,0 +1,36 @@
+import type {
+  CircuitProject,
+  Component,
+  Wire,
+  ValidationResult,
+} from "@spicebench/core";
+import type {
+  CircuitStats,
+  SimulationSummary,
+  PlaceComponentOptions,
+  UpdateComponentOptions,
+  ConnectPinsOptions,
+  SimulationRunOptions,
+} from "@spicebench/mcp";
+
+export interface SpicebenchApi {
+  getCircuit: () => Promise<CircuitProject>;
+  getStats: () => Promise<CircuitStats>;
+  placeComponent: (options: PlaceComponentOptions) => Promise<Component>;
+  updateComponent: (options: UpdateComponentOptions) => Promise<Component>;
+  removeComponent: (id: string) => Promise<{ removedComponentId: string; removedWireCount: number }>;
+  connectPins: (options: ConnectPinsOptions) => Promise<Wire>;
+  validateCircuit: () => Promise<ValidationResult>;
+  runSimulation: (options?: SimulationRunOptions) => Promise<SimulationSummary>;
+  setPower: (powerOn: boolean) => Promise<SimulationSummary | null>;
+  resetCircuit: () => Promise<void>;
+  loadSampleCircuit: (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => Promise<CircuitProject>;
+  onCircuitUpdated: (callback: (circuit: CircuitProject) => void) => () => void;
+  onSimulationUpdated: (callback: (summary: SimulationSummary | null) => void) => () => void;
+}
+
+declare global {
+  interface Window {
+    spicebenchApi: SpicebenchApi;
+  }
+}

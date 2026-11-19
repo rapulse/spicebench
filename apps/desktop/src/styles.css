@@ -1,0 +1,257 @@
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  font-family: "MS Sans Serif", Tahoma, "Segoe UI", sans-serif;
+  font-size: 11px;
+}
+
+.ewb-window {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  background-color: #c0c0c0;
+}
+
+/* Menu Bar */
+.ewb-menu-bar {
+  display: flex;
+  background: #c0c0c0;
+  border-bottom: 1px solid #808080;
+  padding: 2px 4px;
+}
+
+.ewb-menu-item {
+  padding: 2px 6px;
+  cursor: pointer;
+  position: relative;
+}
+
+.ewb-menu-item:hover, .ewb-menu-item.active {
+  background: #000080;
+  color: #ffffff;
+}
+
+.ewb-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #c0c0c0;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+  border: 2px outset #ffffff;
+  z-index: 1000;
+  min-width: 140px;
+  padding: 2px;
+}
+
+.ewb-dropdown-item {
+  padding: 4px 12px;
+  color: #000000;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+}
+
+.ewb-dropdown-item:hover {
+  background: #000080;
+  color: #ffffff;
+}
+
+.ewb-dropdown-divider {
+  height: 1px;
+  border-top: 1px solid #808080;
+  border-bottom: 1px solid #ffffff;
+  margin: 2px 0;
+}
+
+/* ToolBar */
+.ewb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #c0c0c0;
+  padding: 2px 4px;
+  border-bottom: 1px solid #808080;
+}
+
+.ewb-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ewb-tool-btn {
+  min-width: 26px;
+  height: 24px;
+  padding: 2px 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ewb-tool-divider {
+  width: 1px;
+  height: 20px;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  margin: 0 4px;
+}
+
+/* Power Switch */
+.ewb-power-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 2px groove #ffffff;
+  padding: 2px 8px;
+  background: #c0c0c0;
+}
+
+.ewb-power-led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid #404040;
+  background: #400000;
+  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.ewb-power-led.on {
+  background: #00ff00;
+  box-shadow: 0 0 6px #00ff00;
+}
+
+.ewb-rocker-switch {
+  display: flex;
+  flex-direction: column;
+  width: 28px;
+  height: 28px;
+  border: 2px outset #ffffff;
+  background: #808080;
+  cursor: pointer;
+  text-align: center;
+  font-weight: bold;
+}
+
+.ewb-rocker-half {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.ewb-rocker-half.active {
+  background: #c0c0c0;
+  color: #000000;
+  box-shadow: inset 1px 1px 1px #ffffff;
+}
+
+.ewb-rocker-half.inactive {
+  background: #808080;
+  color: #404040;
+  box-shadow: inset 1px 1px 1px #404040;
+}
+
+/* Parts Bin */
+.ewb-parts-bin {
+  background: #c0c0c0;
+  padding: 2px 4px;
+  border-bottom: 2px groove #ffffff;
+}
+
+.ewb-bin-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #808080;
+}
+
+.ewb-bin-tab {
+  padding: 3px 8px;
+  cursor: pointer;
+  border: 2px outset #ffffff;
+  border-bottom: none;
+  background: #c0c0c0;
+  margin-bottom: -1px;
+}
+
+.ewb-bin-tab.active {
+  background: #c0c0c0;
+  font-weight: bold;
+  border-bottom: 2px solid #c0c0c0;
+}
+
+.ewb-bin-shelf {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  overflow-x: auto;
+  background: #d4d0c8;
+  border: 2px inset #ffffff;
+  min-height: 38px;
+}
+
+.ewb-part-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  border: 1px outset #ffffff;
+  background: #c0c0c0;
+  cursor: grab;
+  min-width: 48px;
+  height: 32px;
+}
+
+.ewb-part-item:hover {
+  background: #e0e0e0;
+}
+
+.ewb-part-item:active {
+  border: 1px inset #ffffff;
+}
+
+/* Workspace Canvas */
+.ewb-workspace-container {
+  flex: 1;
+  position: relative;
+  background: #808080;
+  overflow: hidden;
+  border: 2px inset #ffffff;
+  margin: 2px;
+}
+
+.ewb-canvas-svg {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  cursor: default;
+}
+
+/* Status Bar */
+.ewb-status-bar {
+  display: flex;
+  align-items: center;
+  background: #c0c0c0;
+  padding: 2px 4px;
+  border-top: 1px solid #808080;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.ewb-status-panel {
+  border: 1px inset #ffffff;
+  padding: 2px 8px;
+  background: #c0c0c0;
+}
+
+.ewb-status-panel.grow {
+  flex: 1;
+}
