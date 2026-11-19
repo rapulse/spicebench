@@ -174,18 +174,24 @@ describe("NetlistCompiler (Graph -> SPICE Netlist Translation)", () => {
     const xmm2 = createDefaultComponent("MULTIMETER", "XMM2", { x: 20, y: 10 });
     xmm2.params["mode"] = "A"; // Ammeter
 
+    const xmm3 = createDefaultComponent("MULTIMETER", "XMM3", { x: 30, y: 10 }); // left unconnected
+    const r1 = createDefaultComponent("RESISTOR", "R1", { x: 10, y: 20 });
     const gnd = createDefaultComponent("GROUND", "GND1", { x: 0, y: 0 });
 
-    graph.addComponent(xmm1);
-    graph.addComponent(xmm2);
-    graph.addComponent(gnd);
+    for (const c of [xmm1, xmm2, xmm3, r1, gnd]) graph.addComponent(c);
+    graph.connectPins({ componentId: "XMM1", pinId: "pos" }, { componentId: "R1", pinId: "1" });
+    graph.connectPins({ componentId: "XMM1", pinId: "neg" }, { componentId: "GND1", pinId: "0" });
+    graph.connectPins({ componentId: "XMM2", pinId: "pos" }, { componentId: "R1", pinId: "2" });
+    graph.connectPins({ componentId: "XMM2", pinId: "neg" }, { componentId: "GND1", pinId: "0" });
 
     const compiled = NetlistCompiler.compile(graph, { mode: "op" });
 
     // Voltmeter -> 10Meg sensing resistor
-    expect(compiled.netlist).toMatch(/R_XMM1_sense \S+ \S+ 10meg/);
+    expect(compiled.netlist).toMatch(/R_XMM1_sense \S+ 0 10meg/);
     // Ammeter -> 0V current sensing source
-    expect(compiled.netlist).toMatch(/V_XMM2_sense \S+ \S+ 0V/);
+    expect(compiled.netlist).toMatch(/V_XMM2_sense \S+ 0 DC 0/);
+    // Dangling meter emits nothing (would otherwise create a floating sub-circuit)
+    expect(compiled.netlist).not.toMatch(/XMM3/);
   });
 
   it("compiles MOSFETs (NMOS/PMOS) with proper pin order and models", () => {

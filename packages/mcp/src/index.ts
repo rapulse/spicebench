@@ -5,4 +5,4 @@ export * from "./tools/schemas";
 export * from "./tools/register-tools";
 export * from "./server/mcp-server";
 export * from "./transports/stdio";
-export * from "./transports/http-sse";
+export * from "./transports/http";

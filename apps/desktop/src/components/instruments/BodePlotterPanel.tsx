@@ -1,7 +1,18 @@
 import React, { useRef, useEffect, useState } from "react";
 import type { BodePlotterState, Component } from "@spicebench/core";
 import type { SimulationSummary } from "@spicebench/mcp";
-import type { AcResult } from "@spicebench/sim";
+
+/** Adapter: backend Bode data -> { frequency, magnitudeDb: { h: series } } used by the drawing code. */
+function bodeSeries(
+  simulation: SimulationSummary | null,
+  id: string,
+  mode: BodePlotterState["mode"],
+): { frequency: number[]; magnitudeDb: Record<string, number[]> } | null {
+  const b = simulation?.instruments?.[id];
+  if (!b || b.type !== "BODE_PLOTTER" || b.status !== "ok") return null;
+  // TODO(ui): phase mode needs its own vertical scale (degrees), not vMin/vMax in dB.
+  return { frequency: b.frequency, magnitudeDb: { h: mode === "phase" ? b.phaseDeg : b.magnitudeDb } };
+}
 
 export interface BodePlotterPanelProps {
   component: Component;
@@ -11,7 +22,7 @@ export interface BodePlotterPanelProps {
 }
 
 export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
-  component: _component,
+  component,
   state,
   simulation,
   onStateChange,
@@ -49,9 +60,10 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
     }
 
     // 3. Draw AC frequency response curve if AC simulation data is present
-    if (simulation && simulation.rawResult?.data) {
-      const ac = simulation.rawResult.data as AcResult;
-      if (ac && ac.frequency && ac.magnitudeDb) {
+    // Data comes pre-computed from the backend (ADR-011): H = V(OUT)/V(IN) of THIS plotter.
+    const ac = bodeSeries(simulation, component.id, state.mode);
+    if (ac) {
+      {
         const freqs = ac.frequency;
         const outKeys = Object.keys(ac.magnitudeDb);
         const outKey = outKeys[0];
@@ -94,9 +106,8 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas || !simulation?.rawResult?.data) return;
-    const ac = simulation.rawResult.data as AcResult;
-    if (!ac || !ac.frequency || !ac.magnitudeDb) return;
+    const ac = bodeSeries(simulation, component.id, state.mode);
+    if (!canvas || !ac) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;

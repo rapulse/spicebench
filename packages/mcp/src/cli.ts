@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createSpiceBenchMcpServer } from "./server/mcp-server";
 import { startStdioTransport } from "./transports/stdio";
-import { startHttpSseTransport } from "./transports/http-sse";
+import { startHttpTransport } from "./transports/http";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -25,19 +25,22 @@ Usage:
 
 Options:
   --transport <stdio|http>   Transport mode to use (default: stdio)
-  --port <number>            Port for HTTP/SSE transport (default: 3100)
+  --port <number>            Port for HTTP transport (default: 3100, loopback only)
+
+HTTP endpoints: /mcp (Streamable HTTP), /sse (legacy SSE), /health
   --help, -h                 Show this help message
 `);
       process.exit(0);
     }
   }
 
-  const { server } = createSpiceBenchMcpServer();
-
   if (transportMode === "http") {
-    const instance = await startHttpSseTransport(server, { port });
-    console.error(`[SpiceBench MCP] HTTP/SSE Server running on http://localhost:${instance.port}/sse`);
+    // One shared circuit; a separate McpServer per connected client.
+    const { session } = createSpiceBenchMcpServer();
+    const instance = await startHttpTransport(() => createSpiceBenchMcpServer({ session }).server, { port });
+    console.error(`[SpiceBench MCP] HTTP server: ${instance.mcpUrl} (legacy SSE: ${instance.sseUrl})`);
   } else {
+    const { server } = createSpiceBenchMcpServer();
     await startStdioTransport(server);
     // In stdio mode, logs must go to stderr so they don't corrupt JSON-RPC on stdout
     console.error("[SpiceBench MCP] Stdio Transport active and ready.");

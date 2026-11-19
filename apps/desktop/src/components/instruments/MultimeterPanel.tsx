@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import type { MultimeterState, Component } from "@spicebench/core";
-import type { SimulationSummary, InstrumentReading } from "@spicebench/mcp";
+import type { SimulationSummary } from "@spicebench/mcp";
+import type { InstrumentData } from "@spicebench/sim";
 
 export interface MultimeterPanelProps {
   component: Component;
@@ -15,39 +16,9 @@ export const MultimeterPanel: React.FC<MultimeterPanelProps> = ({
   simulation,
   onStateChange,
 }) => {
-  const [reading, setReading] = useState<string>(!simulation ? "0.000 V" : "---");
-
-  // Fetch or calculate live reading whenever simulation results or mode changes
-  useEffect(() => {
-    if (!simulation) {
-      setReading("0.000 " + (state.mode === "V" ? "V" : state.mode === "A" ? "A" : "Ω"));
-      return;
-    }
-
-    if (window.spicebenchApi?.readInstrument) {
-      window.spicebenchApi
-        .readInstrument(component.id)
-        .then((res: InstrumentReading) => {
-          if (res && res.formatted) {
-            setReading(res.formatted);
-          }
-        })
-        .catch(() => {
-          // Fallback to local pin voltage calculation if available
-          const vPos = simulation.pinVoltages?.[`${component.id}:pos`] ?? 0;
-          const vNeg = simulation.pinVoltages?.[`${component.id}:neg`] ?? 0;
-          const diff = vPos - vNeg;
-          const sign = diff >= 0 ? "+" : "";
-          setReading(`${sign}${diff.toFixed(3)} V`);
-        });
-    } else if (simulation.pinVoltages) {
-      const vPos = simulation.pinVoltages[`${component.id}:pos`] ?? 0;
-      const vNeg = simulation.pinVoltages[`${component.id}:neg`] ?? 0;
-      const diff = vPos - vNeg;
-      const sign = diff >= 0 ? "+" : "";
-      setReading(`${sign}${diff.toFixed(3)} V`);
-    }
-  }, [component.id, simulation, state.mode, state.currentType]);
+  // Reading is computed in the backend from ngspice results (ADR-011); no local fallback math,
+  // so the display never shows a fabricated 0 when the value cannot be measured.
+  const reading = formatMultimeter(simulation?.instruments?.[component.id], state.mode);
 
   const handleModeChange = (mode: "V" | "A" | "R" | "dB") => {
     onStateChange({ ...state, mode });
@@ -140,3 +111,19 @@ export const MultimeterPanel: React.FC<MultimeterPanelProps> = ({
     </div>
   );
 };
+
+const UNIT_LABEL: Record<string, string> = { V: "V", A: "A", R: "Ω", dB: "dB" };
+
+function formatMultimeter(d: InstrumentData | undefined, mode: string): string {
+  const unit = UNIT_LABEL[mode] ?? "V";
+  if (!d || d.type !== "MULTIMETER") return `0.000 ${unit}`; // power off
+  if (d.value === null) {
+    // TODO(ui): EWB-style display for these states
+    return d.status === "not_connected" ? "----" : d.status === "invalid" ? "Err" : "---";
+  }
+  if (d.unit === "dB") return Number.isFinite(d.value) ? `${d.value.toFixed(2)} dB` : "-∞ dB";
+  const a = Math.abs(d.value);
+  const steps: Array<[number, string]> = [[1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]];
+  const [scale, p] = a === 0 ? [1, ""] : (steps.find(([s]) => a >= s) ?? [1e-9, "n"]);
+  return `${(d.value / scale).toFixed(3)} ${p}${unit}`;
+}

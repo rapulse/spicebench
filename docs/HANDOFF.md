@@ -1,58 +1,60 @@
 # HANDOFF — Оперативный статус проекта
 
-- **Последнее обновление:** 2026-11-19, Фаза 9: выполнены 9.1, 9.2, 9.3а (коммиты `50a2262` + следующий)
-- **Текущая фаза:** Фаза 9 `[~]`; пункты 6.x, 7.3 и 8.1 возвращены в работу (см. ревизии в ROADMAP)
-- **Главный визуальный эталон:** `electronics-workbench/IMG_6708.jpg`
+- **Последнее обновление:** 2026-11-19. Фаза 9: готовы 9.1–9.4б, открыты 9.3б (GUI) и 9.5 (сборка).
+- **Следующая сессия (другой агент):** UI под EWB 5.12 — внешний вид, порядок и тип кнопок.
+  Бэкенд (расчёт, приборы, MCP) готов и проверен. **Логику расчёта в Renderer не переносить.**
+- **Эталон:** `electronics-workbench/IMG_6708.jpg` + 25 скриншотов в `electronics-workbench/`.
 
-## Что было не так (найдено на ревью)
-- Вместо ngspice по умолчанию работал самописный `BuiltinMnaEngine`: диоды и транзисторы как ключи,
-  ОУ игнорировались в `.ac`, `.tran` обрезался на 2000 шагах, таймаут не работал (расчёт шёл
-  inline в Electron Main), а тест таймаута проверял mock. Пример: «5 V → 1 kΩ → диод» давал `V(a) = 5 V`.
+## Контракт для UI (что важно не сломать)
+- Расчёт: ngspice-45.2 WASM в воркере Electron Main (ADR-007). Renderer ничего не считает.
+- «Power On» = `window.spicebenchApi.runSimulation()` **без аргументов**: выполняет все анализы,
+  нужные приборам, и возвращает `SimulationSummary` (ADR-011, `docs/wiki/instruments-spec.md` §4).
+- Данные прибора: `simulation.instruments[component.id]`, тип `InstrumentData` из `@spicebench/sim`.
+  Поле `status`: `ok | not_connected | no_data | invalid`. При статусе не `ok` значения равны
+  `null`: показывать «нет измерения», **никогда не рисовать 0**.
+  - Мультиметр: `value`, `unit` (V/A/Ohm/dB), `coupling`. Осциллограф: `time[]`, `chA[]|null`,
+    `chB[]|null` (уже дифференциальные). Боде: `frequency[]`, `magnitudeDb[]`, `phaseDeg[]` (`Vout/Vin`).
+- Панели уже читают `instruments[id]` (минимальная перепривязка данных, визуал не трогался):
+  `MultimeterPanel` (`formatMultimeter`), `OscilloscopePanel` (адаптер `scope`), `BodePlotterPanel`
+  (`bodeSeries`). `TODO(ui)` в коде: шкала фазы в градусах у Боде; EWB-вид состояний «нет
+  измерения» и «Err» у мультиметра.
+- Изменение настроек прибора при включённом питании: после `updateInstrument` UI должен снова
+  вызвать `runSimulation()`, иначе показания устареют (бэкенд помечает схему как dirty, но сам
+  расчёт не запускает).
+- Настройки прибора: окно (`InstrumentState`) приоритетнее `params`, `CircuitSession` синхронизирует
+  их в обе стороны. Не создавать состояние прибора в UI с жёсткими дефолтами: сессия создаёт его
+  при `placeComponent` из params (фолбэк в `App.tsx handleComponentDoubleClick` можно убрать).
+- Порт MCP и адреса: `McpServerStatus.mcpUrl` (`http://127.0.0.1:3100/mcp`), `sseUrl` — legacy.
 
-## Что сделано
-- **ADR-007:** ngspice-45.2 в WASM (`eecircuit-engine@1.9.0`, MIT, точная версия) встроен в
-  `packages/sim`. Пользователю ничего ставить не нужно.
-  - `runner/ngspice-worker.ts` (самодостаточный, только `import type`), `ngspice-protocol.ts`,
-    `wasm-ngspice-engine.ts`: воркер, таймаут через `terminate()` и пересоздание, перехват console.
-  - `parser/ngspice-result.ts`: конвертация `ResultType` в `SimulationData` и классификация сообщений.
-  - `SpiceRunner({ timeoutMs, engine: "wasm"|"native", workerPath, customEngine })` с очередью запусков.
-    `SimulationResult` получил поля `warnings` и `engine`, ошибки бросаются как `SimulationError.details`.
-  - `BuiltinMnaEngine` и старый `spice-worker.ts` удалены. `NativeNgspiceEngine` адаптирован
-    (`SPICE_ASCIIRAWFILE=1`), но **не проверен**: ngspice CLI на машине нет.
-  - `CircuitSession(project?, { runner })`, `warmUpSimulator()`, `dispose()`. `SimulationSummary`
-    получил поля `engine` и `warnings`.
-  - Electron: отдельный Vite entry `dist-electron/ngspice-worker.js` (+ чанк около 20 МБ),
-    `workerPath` задаётся в `main.ts`, прогрев при старте, `dispose` в `before-quit`.
-- **ADR-008:** XSPICE в WASM-сборке нет, логика сделана на B-источниках. Исправлены `&` (вешал
-  ngspice) и `^` (это степень, не XOR) на `&&`, `||`, `!=`.
-- **Тесты:** `golden-fixtures-nonlinear.test.ts` (Fixture 6–10: Шокли, BJT, ОУ `.ac`, `.tran` на 10k
-  шагов, таблицы истинности). `spice-runner.test.ts`: настоящий таймаут и восстановление, очередь,
-  `SPICE_ERROR` с элементом, warnings. Fixture 1: ngspice не отдаёт узел `0`, ток `v_v1` проверяется строго.
-- **Инфраструктура:** `.tmp/` для проб (в `.gitignore`, исключён из vitest и eslint). Пробы запускаются так:
-  `pnpm exec vitest run --root .tmp --config vitest.probe.config.ts`.
+## Сверить с оригиналом EWB 5.12 (может поменять числа)
+1. `AC_VOLTAGE_SOURCE` (120 V / 60 Hz): значение — RMS или амплитуда? Сейчас трактуется как амплитуда.
+2. Мультиметр dB: опорный уровень (сейчас 0 dB = 1 V, константа `DB_REFERENCE_V`).
+3. Генератор: амплитуда пиковая относительно COM, «−» инверсный. Сверить с оригиналом.
+4. Ширина экрана осциллографа (сейчас 10 делений, `SCOPE_DIVISIONS`).
 
-- **9.3а:** `component-smoke.test.ts`: все 33 типа (кроме GROUND) компилируются и решаются ngspice в
-  `.op` и `.tran`. 555 переписан с RS-защёлкой, компилятор сам добавляет `uic` (ADR-009, Fixture 11:
-  6799 Гц против 6870 Гц, скважность 0.518 против 0.524).
+## Что сделано в этой сессии (коммиты `50a2262`, `f7a897b` + текущий)
+- ADR-007/008/009: ngspice WASM, логика на B-источниках, 555 с защёлкой, авто-`uic`.
+- ADR-010: MCP `transports/http.ts` (Streamable HTTP `/mcp` + legacy SSE, McpServer на клиента,
+  только loopback, проверка Origin/Host, без `CORS *`). `http-sse.ts` удалён. Ошибки содержат
+  `componentIds`, `rawResult` агенту не отправляется, внутренние векторы подсхем отфильтрованы.
+- ADR-011: `sim/compiler/instrument-settings.ts`, `sim/instruments/instrument-data.ts`,
+  `mcp/session/simulation-summary.ts`. Омметр, AC/dB, offset/duty/«−» генератора, Боде `Vout/Vin`,
+  висячие выводы приборов не попадают в нетлист, режим анализа выбирается детерминированно.
 
 ## Проверки
-- `pnpm typecheck`: 0 ошибок (4 пакета). `pnpm lint`: чисто. `pnpm test`: 21 файл, **160/160**.
-- Живой Electron (собранный бандл) проверен через его MCP (`.tmp/live-mcp-check.mjs`): диод `.op`
-  = 0.653 V / 4.35 мА, 555 `.tran` генерирует, `engine: "ngspice-wasm"`. Приборы глазами не смотрел.
-- `pnpm --filter @spicebench/desktop build`: собирается. Собранный `ngspice-worker.js` считает под
-  Node Electron 33 (20.18.3): диод `V(a) = 0.6929 V`. Утечек в stdout/stderr из воркера: 0 байт.
-- Все `.model` и `.subckt` из `models.ts` принимаются ngspice без ошибок.
+- `pnpm typecheck` 0 ошибок, `pnpm lint` чисто, `pnpm test`: **22 файла, 171 тест, все зелёные**.
+- Живой Electron (собранный бандл) через `/mcp` (`.tmp/live-instruments-check.mjs`): RC + 4 прибора,
+  Power On = `tran`+`ac`. AC-мультиметр 0.4997 V при ожидаемых 0.5000; осциллограф A Vpp 2.000 V;
+  Боде −0.01 dB @ 10 Hz; параметры агента доходят до расчёта.
 
 ## Известные нюансы
-- `signalsSummary` в MCP включает внутренние векторы подсхем (`i(b.x_u1.b_latch)`), это шум для агента.
-- GUI вживую после смены движка **не запускался**: приборы не перепроверены.
-- MCP по-прежнему на legacy SSE с `CORS *` без проверки Origin (9.4).
-- Бинарь MCP `dist/cli.js` после `tsc` скорее всего не запустится в чистом Node: импорты без
-  расширений. Это старая проблема, не проверял.
-- `README.md` содержит незакоммиченные правки пользователя: раздел «Дополнительно», упоминания
-  XSPICE и «Streamable HTTP». Агент его не трогал.
-- Изменения **не закоммичены**.
+- Токена авторизации у MCP нет (ADR-010). `NativeNgspiceEngine` не проверен (нет ngspice CLI).
+- `packages/mcp` `dist/cli.js` после `tsc` скорее всего не запустится в чистом Node: импорты без
+  расширений. Старая проблема, не проверял.
+- Конфиги клиентов Claude Desktop (`mcp-remote`) и Antigravity (`serverUrl`) не проверены на
+  реальных клиентах. Cursor и Claude Code по `url` — стандартный формат.
+- `README.md` содержит незакоммиченные правки пользователя, агент его не трогает.
 
-## Следующий шаг
-- 9.3б: пользователь вручную проверяет 4 прибора в `pnpm --filter desktop dev` (делитель, RC, RLC).
-- 9.4: MCP на Streamable HTTP + проверка Origin/Host, сессия на клиента; отфильтровать векторы `.x_`.
+## Следующие шаги
+- 9.3б: UI под EWB 5.12 (другая сессия), затем вручную пройти «Power On» на делителе, RC и RLC.
+- 9.5: `pnpm --filter @spicebench/desktop pack` на macOS, проверить, что ngspice работает в .app.

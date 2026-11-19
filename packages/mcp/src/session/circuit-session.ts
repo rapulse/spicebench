@@ -37,10 +37,19 @@ import {
   TranOptions,
   AcOptions,
   DcOptions,
-  OpResult,
-  TranResult,
-  AcResult,
+  SimulationError,
+  computeInstrumentData,
+  requiredAnalyses,
+  type AnalysisResults,
 } from "@spicebench/sim";
+import {
+  buildSimulationSummary,
+  formatInstrumentReading,
+  type InstrumentReading,
+  type SimulationSummary,
+} from "./simulation-summary";
+
+export type { InstrumentReading, SimulationSummary } from "./simulation-summary";
 
 export interface PlaceComponentOptions {
   type: ComponentType;
@@ -93,47 +102,6 @@ export interface CircuitSessionOptions {
   runner?: SpiceRunnerConfig;
 }
 
-export interface SimulationSummary {
-  mode: SimulationMode;
-  success: boolean;
-  durationMs: number;
-  /** Simulator that produced the result, e.g. "ngspice-wasm". */
-  engine: string;
-  /** Non-fatal ngspice notes/warnings. */
-  warnings: string[];
-  pinVoltages?: Record<string, number>;
-  nodeVoltages?: Record<string, number>;
-  branchCurrents?: Record<string, number>;
-  timeRange?: { start: number; stop: number; points: number };
-  signalsSummary?: Record<
-    string,
-    {
-      min: number;
-      max: number;
-      avg: number;
-      rms: number;
-      last: number;
-    }
-  >;
-  samples?: {
-    timeOrFreq: number[];
-    values: Record<string, number[]>;
-  };
-  acSummary?: {
-    peakFrequency: number;
-    peakMagnitudeDb: number;
-    peakMagnitudeLinear: number;
-  };
-  rawResult?: SimulationResult;
-}
-
-export interface InstrumentReading {
-  instrumentId: string;
-  type: "MULTIMETER" | "OSCILLOSCOPE" | "BODE_PLOTTER" | "FUNCTION_GENERATOR";
-  readings: Record<string, unknown>;
-  formatted: string;
-}
-
 export interface AgentActionLog {
   id: string;
   tool: string;
@@ -147,6 +115,7 @@ export class CircuitSession {
   private commandManager: CommandManager = new CommandManager(100);
   private lastCompiled?: CompiledNetlist;
   private lastResult?: SimulationResult;
+  private lastSummary?: SimulationSummary;
   private isDirty = true;
 
   private circuitChangeListeners: Set<(circuit: CircuitProject) => void> = new Set();
@@ -302,50 +271,12 @@ export class CircuitSession {
 
     this.commandManager.execute(new AddComponentCommand(comp), this.graph);
 
-    // Initialize default instrument state if component is a virtual instrument
-    if (type === "MULTIMETER" && !this.graph.getInstrument(comp.id)) {
-      this.graph.setInstrument({
-        instrumentId: comp.id,
-        isOpen: false,
-        windowPosition: { x: 120, y: 80 },
-        mode: "V",
-        currentType: "DC",
-      });
-    } else if (type === "FUNCTION_GENERATOR" && !this.graph.getInstrument(comp.id)) {
-      this.graph.setInstrument({
-        instrumentId: comp.id,
-        isOpen: false,
-        windowPosition: { x: 150, y: 100 },
-        waveform: "sine",
-        frequency: comp.params?.frequency || "1kHz",
-        dutyCycle: 50,
-        amplitude: comp.params?.voltage || "5V",
-        offset: "0V",
-      });
-    } else if (type === "OSCILLOSCOPE" && !this.graph.getInstrument(comp.id)) {
-      this.graph.setInstrument({
-        instrumentId: comp.id,
-        isOpen: false,
-        windowPosition: { x: 180, y: 120 },
-        timebase: "1ms/div",
-        xPos: 0,
-        chA: { scale: "5V/div", yPos: 0, coupling: "DC" },
-        chB: { scale: "5V/div", yPos: 0, coupling: "DC" },
-        trigger: { mode: "auto", edge: "positive", level: 0, source: "chA" },
-      });
-    } else if (type === "BODE_PLOTTER" && !this.graph.getInstrument(comp.id)) {
-      this.graph.setInstrument({
-        instrumentId: comp.id,
-        isOpen: false,
-        windowPosition: { x: 210, y: 140 },
-        mode: "magnitude",
-        scaleH: "log",
-        scaleV: "log",
-        fstart: "10Hz",
-        fstop: "100kHz",
-        vMin: -60,
-        vMax: 20,
-      });
+    // Initialize instrument window state. Values passed by the caller (e.g. an MCP agent's
+    // place_component params) take precedence over defaults, otherwise the window state would
+    // silently override them in the compiler (ADR-011).
+    if (!this.graph.getInstrument(comp.id)) {
+      const initial = initialInstrumentState(comp);
+      if (initial) this.graph.setInstrument(initial);
     }
 
     this.isDirty = true;
@@ -396,9 +327,32 @@ export class CircuitSession {
       this.rerouteWiresForComponent(id);
     }
 
+    if (params) this.syncParamsToInstrumentState(id, params);
+
     this.isDirty = true;
     this.notifyCircuitChange();
     return this.graph.getComponent(id)!;
+  }
+
+  /**
+   * Instrument settings live in two places (component params for MCP, InstrumentState for the
+   * instrument window); the compiler prefers InstrumentState. Mirror param edits into the state so
+   * an agent's `update_component` is not silently overridden by the window state (ADR-011).
+   */
+  private syncParamsToInstrumentState(id: string, params: Record<string, string>): void {
+    const state = this.graph.getInstrument(id) as Record<string, unknown> | undefined;
+    if (!state) return;
+    const next: Record<string, unknown> = { ...state };
+    for (const [key, value] of Object.entries(params)) {
+      if (!(key in state)) continue;
+      if (key === "dutyCycle" || key === "vMin" || key === "vMax" || key === "xPos") {
+        const n = Number(value);
+        if (Number.isFinite(n)) next[key] = n;
+      } else {
+        next[key] = value;
+      }
+    }
+    this.graph.setInstrument(next as InstrumentState);
   }
 
   private rerouteWiresForComponent(componentId: string): void {
@@ -455,6 +409,14 @@ export class CircuitSession {
 
   public updateInstrument(state: InstrumentState): void {
     this.graph.setInstrument(state);
+    // Mirror window settings into component params so get_circuit_state shows what is simulated.
+    const comp = this.graph.getComponent(state.instrumentId);
+    if (comp) {
+      for (const key of INSTRUMENT_SETTING_KEYS) {
+        const v = (state as Record<string, unknown>)[key];
+        if (v !== undefined && (typeof v === "string" || typeof v === "number")) comp.params[key] = String(v);
+      }
+    }
     this.isDirty = true;
     this.notifyCircuitChange();
   }
@@ -550,6 +512,11 @@ export class CircuitSession {
     return TopologyValidator.validate(this.graph);
   }
 
+  /**
+   * Runs the simulation. Without `mode` this is "Power On": every analysis the instruments
+   * need is executed (op / tran / ac) and each instrument gets its readings (ADR-011).
+   * With `mode` only that analysis runs.
+   */
   public async runSimulation(options: SimulationRunOptions = {}): Promise<SimulationSummary> {
     const validation = this.validate();
     if (validation.errors.length > 0) {
@@ -559,69 +526,74 @@ export class CircuitSession {
       throw new Error(`Cannot run simulation due to circuit topology errors: ${summaryMsg}`);
     }
 
-    const compiled = NetlistCompiler.compile(this.graph, {
-      mode: options.mode,
-      tran: options.tran,
-      ac: options.ac,
-      dc: options.dc,
-    });
-    this.lastCompiled = compiled;
+    const modes: SimulationMode[] = options.mode ? [options.mode] : requiredAnalyses(this.graph);
+    const results: SimulationResult[] = [];
+    let compiled: CompiledNetlist | undefined;
+    for (const mode of modes) {
+      compiled = NetlistCompiler.compile(this.graph, { mode, tran: options.tran, ac: options.ac, dc: options.dc });
+      try {
+        results.push(await this.runner.run(compiled.netlist, options.timeoutMs));
+      } catch (err) {
+        throw this.attachComponentIds(err);
+      }
+    }
+    const primary =
+      results.find((r) => r.mode === options.mode) ??
+      results.find((r) => r.mode === "ac") ??
+      results.find((r) => r.mode === "tran") ??
+      results[0]!;
 
-    const result = await this.runner.run(compiled.netlist, options.timeoutMs);
-    this.lastResult = result;
+    const byMode: AnalysisResults = {};
+    for (const r of results) if (r.mode === "op" || r.mode === "tran" || r.mode === "ac") byMode[r.mode] = r;
+    const instruments = computeInstrumentData(this.graph, compiled!, byMode);
+
+    this.lastCompiled = compiled;
+    this.lastResult = primary;
     this.isDirty = false;
 
-    const summary = this.buildSimulationSummary(result, compiled);
+    const summary = buildSimulationSummary(primary, compiled!, results, instruments);
+    this.lastSummary = summary;
     this.notifySimulationChange(summary);
     return summary;
   }
 
+  /** Maps SPICE element names in a SimulationError (e.g. "d_d1", "x_u1") to circuit component ids. */
+  private attachComponentIds(err: unknown): unknown {
+    if (!(err instanceof SimulationError)) return err;
+    const ids = new Set<string>();
+    const comps = this.graph.getAllComponents();
+    for (const name of err.details.problematicComponents ?? []) {
+      const m = /^[a-z]+_(.+)$/i.exec(name);
+      const candidate = (m?.[1] ?? name).toLowerCase();
+      const hit = comps.find(
+        (c) =>
+          candidate === c.id.toLowerCase() ||
+          candidate.startsWith(`${c.id.toLowerCase()}_`) ||
+          candidate.startsWith(`${c.id.toLowerCase()}.`),
+      );
+      if (hit) ids.add(hit.id);
+    }
+    err.details.componentIds = [...ids];
+    if (ids.size > 0 && !err.message.includes("Components:")) {
+      err.message += `\nComponents: ${[...ids].join(", ")}`;
+    }
+    return err;
+  }
+
+  /** Same numbers as the instrument windows: computed from the last Power On (re-run if stale). */
   public async readInstrument(instrumentId: string): Promise<InstrumentReading> {
     const comp = this.graph.getComponent(instrumentId);
     if (!comp) {
       throw new Error(`Instrument '${instrumentId}' not found in circuit.`);
     }
-
-    switch (comp.type) {
-      case "MULTIMETER": {
-        // Run OP simulation if dirty or not yet run
-        if (this.isDirty || !this.lastResult || this.lastResult.mode !== "op") {
-          await this.runSimulation({ mode: "op" });
-        }
-        return this.readMultimeter(comp);
-      }
-
-      case "OSCILLOSCOPE": {
-        // Run TRAN simulation if dirty or not yet run
-        if (this.isDirty || !this.lastResult || this.lastResult.mode !== "tran") {
-          await this.runSimulation({ mode: "tran" });
-        }
-        return this.readOscilloscope(comp);
-      }
-
-      case "BODE_PLOTTER": {
-        // Run AC simulation if dirty or not yet run
-        if (this.isDirty || !this.lastResult || this.lastResult.mode !== "ac") {
-          await this.runSimulation({ mode: "ac" });
-        }
-        return this.readBodePlotter(comp);
-      }
-
-      case "FUNCTION_GENERATOR": {
-        const ampl = comp.params["amplitude"] ?? "5V";
-        const freq = comp.params["frequency"] ?? "1kHz";
-        const wave = comp.params["waveform"] ?? "sine";
-        return {
-          instrumentId,
-          type: "FUNCTION_GENERATOR",
-          readings: { amplitude: ampl, frequency: freq, waveform: wave },
-          formatted: `FuncGen: ${wave.toUpperCase()} ${ampl} @ ${freq}`,
-        };
-      }
-
-      default:
-        throw new Error(`Component '${instrumentId}' is of type '${comp.type}', not an instrument.`);
+    if (!["MULTIMETER", "OSCILLOSCOPE", "BODE_PLOTTER", "FUNCTION_GENERATOR"].includes(comp.type)) {
+      throw new Error(`Component '${instrumentId}' is of type '${comp.type}', not an instrument.`);
     }
+    let summary = this.lastSummary;
+    if (this.isDirty || !summary || !summary.instruments[instrumentId]) {
+      summary = await this.runSimulation();
+    }
+    return formatInstrumentReading(summary.instruments[instrumentId]!);
   }
 
   public exportSpice(options: SimulationRunOptions = {}): string {
@@ -635,6 +607,7 @@ export class CircuitSession {
     this.commandManager.clear();
     this.lastCompiled = undefined;
     this.lastResult = undefined;
+    this.lastSummary = undefined;
     this.isDirty = true;
     this.notifyCircuitChange();
     this.notifySimulationChange(null);
@@ -645,6 +618,7 @@ export class CircuitSession {
     this.commandManager.clear();
     this.lastCompiled = undefined;
     this.lastResult = undefined;
+    this.lastSummary = undefined;
     this.isDirty = true;
     this.notifyCircuitChange();
     this.notifySimulationChange(null);
@@ -660,208 +634,75 @@ export class CircuitSession {
     return `${prefix}${index}`;
   }
 
-  private buildSimulationSummary(
-    result: SimulationResult,
-    compiled: CompiledNetlist,
-  ): SimulationSummary {
-    const summary: SimulationSummary = {
-      mode: result.mode,
-      success: result.success,
-      durationMs: result.durationMs,
-      engine: result.engine,
-      warnings: result.warnings,
-      rawResult: result,
-    };
+}
 
-    if (result.mode === "op") {
-      const op = result.data as OpResult;
-      summary.nodeVoltages = op.nodeVoltages;
-      summary.branchCurrents = op.branchCurrents;
+/** Instrument settings shared between component params and InstrumentState (ADR-011). */
+const INSTRUMENT_SETTING_KEYS = [
+  "mode",
+  "currentType",
+  "waveform",
+  "frequency",
+  "amplitude",
+  "offset",
+  "dutyCycle",
+  "timebase",
+  "fstart",
+  "fstop",
+] as const;
 
-      // Map pin identifiers to voltages for direct agent interpretation
-      const pinVoltages: Record<string, number> = {};
-      for (const [pinKey, spiceNode] of compiled.nodeMap.entries()) {
-        const v = op.nodeVoltages[spiceNode.toLowerCase()] ?? op.nodeVoltages[spiceNode] ?? 0;
-        pinVoltages[pinKey] = v;
-      }
-      summary.pinVoltages = pinVoltages;
-    } else if (result.mode === "tran") {
-      const tran = result.data as TranResult;
-      const nPoints = tran.time.length;
-      summary.timeRange = {
-        start: tran.time[0] ?? 0,
-        stop: tran.time[nPoints - 1] ?? 0,
-        points: nPoints,
-      };
-
-      const signalsSummary: Record<string, { min: number; max: number; avg: number; rms: number; last: number }> = {};
-      for (const [sig, vals] of Object.entries(tran.variables)) {
-        if (vals.length === 0) continue;
-        let min = vals[0]!;
-        let max = vals[0]!;
-        let sum = 0;
-        let sumSq = 0;
-        for (const v of vals) {
-          if (v < min) min = v;
-          if (v > max) max = v;
-          sum += v;
-          sumSq += v * v;
-        }
-        const avg = sum / vals.length;
-        const rms = Math.sqrt(sumSq / vals.length);
-        const last = vals[vals.length - 1]!;
-        signalsSummary[sig] = { min, max, avg, rms, last };
-      }
-      summary.signalsSummary = signalsSummary;
-
-      // Downsample for compact AI payload (up to 40 evenly-spaced samples)
-      const maxSamples = 40;
-      const step = Math.max(1, Math.floor(nPoints / maxSamples));
-      const sampleTimes: number[] = [];
-      const sampleVals: Record<string, number[]> = {};
-      for (const sig of Object.keys(tran.variables)) {
-        sampleVals[sig] = [];
-      }
-
-      for (let i = 0; i < nPoints; i += step) {
-        sampleTimes.push(tran.time[i]!);
-        for (const [sig, vals] of Object.entries(tran.variables)) {
-          sampleVals[sig]!.push(vals[i]!);
-        }
-      }
-      summary.samples = { timeOrFreq: sampleTimes, values: sampleVals };
-    } else if (result.mode === "ac") {
-      const ac = result.data as AcResult;
-      let maxDb = -Infinity;
-      let peakF = 0;
-
-      // Find global peak across magnitudeDb signals
-      for (const [_sig, dbVals] of Object.entries(ac.magnitudeDb)) {
-        for (let i = 0; i < dbVals.length; i++) {
-          const val = dbVals[i]!;
-          if (val > maxDb) {
-            maxDb = val;
-            peakF = ac.frequency[i]!;
-          }
-        }
-      }
-
-      summary.acSummary = {
-        peakFrequency: peakF,
-        peakMagnitudeDb: maxDb,
-        peakMagnitudeLinear: Math.pow(10, maxDb / 20),
-      };
-
-      // Downsample AC response
-      const nPoints = ac.frequency.length;
-      const maxSamples = 30;
-      const step = Math.max(1, Math.floor(nPoints / maxSamples));
-      const sampleF: number[] = [];
-      const sampleDb: Record<string, number[]> = {};
-      for (const sig of Object.keys(ac.magnitudeDb)) {
-        sampleDb[sig] = [];
-      }
-      for (let i = 0; i < nPoints; i += step) {
-        sampleF.push(ac.frequency[i]!);
-        for (const [sig, vals] of Object.entries(ac.magnitudeDb)) {
-          sampleDb[sig]!.push(vals[i]!);
-        }
-      }
-      summary.samples = { timeOrFreq: sampleF, values: sampleDb };
-    }
-
-    return summary;
-  }
-
-  private readMultimeter(comp: Component): InstrumentReading {
-    const mode = (comp.params["mode"] || "V").toUpperCase(); // V | A | Omega
-    const op = this.lastResult?.data as OpResult | undefined;
-
-    let value = 0;
-    let unit = "V";
-
-    if (mode === "V") {
-      unit = "V";
-      const posNode = this.lastCompiled?.nodeMap.get(`${comp.id}:pos`)?.toLowerCase() ?? "0";
-      const negNode = this.lastCompiled?.nodeMap.get(`${comp.id}:neg`)?.toLowerCase() ?? "0";
-      const vPos = op?.nodeVoltages[posNode] ?? 0;
-      const vNeg = op?.nodeVoltages[negNode] ?? 0;
-      value = vPos - vNeg;
-    } else if (mode === "A") {
-      unit = "A";
-      const branchKey = `v_${comp.id.toLowerCase()}_sense`;
-      value = op?.branchCurrents[branchKey] ?? 0;
-    }
-
-    return {
-      instrumentId: comp.id,
-      type: "MULTIMETER",
-      readings: { mode, value, unit },
-      formatted: `${value >= 0 ? "+" : ""}${value.toFixed(4)} ${unit}`,
-    };
-  }
-
-  private readOscilloscope(comp: Component): InstrumentReading {
-    const tran = this.lastResult?.data as TranResult | undefined;
-    const chANode = this.lastCompiled?.nodeMap.get(`${comp.id}:ch_a_pos`)?.toLowerCase();
-    const chBNode = this.lastCompiled?.nodeMap.get(`${comp.id}:ch_b_pos`)?.toLowerCase();
-
-    const getMetrics = (node?: string) => {
-      if (!node || !tran || !tran.variables[`v(${node})`]) {
-        return { vpp: 0, vrms: 0, vavg: 0, min: 0, max: 0 };
-      }
-      const vals = tran.variables[`v(${node})`]!;
-      let min = vals[0]!;
-      let max = vals[0]!;
-      let sum = 0;
-      let sumSq = 0;
-      for (const v of vals) {
-        if (v < min) min = v;
-        if (v > max) max = v;
-        sum += v;
-        sumSq += v * v;
-      }
+function initialInstrumentState(comp: Component): InstrumentState | undefined {
+  const p = comp.params;
+  const str = (key: string, fallback: string) => (p[key] !== undefined && p[key] !== "" ? String(p[key]) : fallback);
+  switch (comp.type) {
+    case "MULTIMETER": {
+      const mode = str("mode", "V");
       return {
-        vpp: max - min,
-        vrms: Math.sqrt(sumSq / vals.length),
-        vavg: sum / vals.length,
-        min,
-        max,
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 120, y: 80 },
+        mode: mode === "A" || mode === "R" || mode === "dB" ? mode : "V",
+        currentType: str("currentType", "DC").toUpperCase() === "AC" ? "AC" : "DC",
       };
-    };
-
-    const chA = getMetrics(chANode);
-    const chB = getMetrics(chBNode);
-
-    return {
-      instrumentId: comp.id,
-      type: "OSCILLOSCOPE",
-      readings: { channelA: chA, channelB: chB },
-      formatted: `CH A: Vpp=${chA.vpp.toFixed(3)}V, Vrms=${chA.vrms.toFixed(3)}V | CH B: Vpp=${chB.vpp.toFixed(3)}V, Vrms=${chB.vrms.toFixed(3)}V`,
-    };
-  }
-
-  private readBodePlotter(comp: Component): InstrumentReading {
-    const ac = this.lastResult?.data as AcResult | undefined;
-    const outNode = this.lastCompiled?.nodeMap.get(`${comp.id}:out_pos`)?.toLowerCase();
-    const outDb = outNode && ac ? ac.magnitudeDb[`v(${outNode})`] : undefined;
-
-    let peakDb = -Infinity;
-    let peakF = 0;
-    if (outDb && ac) {
-      for (let i = 0; i < outDb.length; i++) {
-        if (outDb[i]! > peakDb) {
-          peakDb = outDb[i]!;
-          peakF = ac.frequency[i]!;
-        }
-      }
     }
-
-    return {
-      instrumentId: comp.id,
-      type: "BODE_PLOTTER",
-      readings: { peakFrequency: peakF, peakGainDb: peakDb },
-      formatted: `Peak: ${peakDb.toFixed(2)} dB @ ${peakF.toFixed(1)} Hz`,
-    };
+    case "FUNCTION_GENERATOR": {
+      const w = str("waveform", "sine");
+      const duty = Number(str("dutyCycle", "50"));
+      return {
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 150, y: 100 },
+        waveform: w === "square" || w === "triangle" ? w : "sine",
+        frequency: str("frequency", "1kHz"),
+        dutyCycle: Number.isFinite(duty) ? Math.min(99, Math.max(1, duty)) : 50,
+        amplitude: str("amplitude", str("voltage", "5V")),
+        offset: str("offset", "0V"),
+      };
+    }
+    case "OSCILLOSCOPE":
+      return {
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 180, y: 120 },
+        timebase: str("timebase", "1ms/div"),
+        xPos: 0,
+        chA: { scale: str("chA_scale", "5V/div"), yPos: 0, coupling: "DC" },
+        chB: { scale: str("chB_scale", "5V/div"), yPos: 0, coupling: "DC" },
+        trigger: { mode: "auto", edge: "positive", level: 0, source: "chA" },
+      };
+    case "BODE_PLOTTER":
+      return {
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 210, y: 140 },
+        mode: "magnitude",
+        scaleH: "log",
+        scaleV: "log",
+        fstart: str("fstart", "10Hz"),
+        fstop: str("fstop", "100kHz"),
+        vMin: -60,
+        vMax: 20,
+      };
+    default:
+      return undefined;
   }
 }

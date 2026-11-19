@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 import {
   CircuitSession,
   createSpiceBenchMcpServer,
-  startHttpSseTransport,
+  startHttpTransport,
   type SimulationSummary,
   type AgentActionLog,
-  type HttpSseServerInstance,
+  type HttpTransportInstance,
 } from "@spicebench/mcp";
 import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
 import { NetlistCompiler, SpiceImporter } from "@spicebench/sim";
@@ -20,8 +20,10 @@ let mainWindow: BrowserWindow | null = null;
 const session = new CircuitSession(undefined, {
   runner: { workerPath: path.join(__dirname, "ngspice-worker.js") },
 });
-const mcpInstance = createSpiceBenchMcpServer({ session });
-let mcpTransport: HttpSseServerInstance | null = null;
+// Each MCP client gets its own McpServer bound to the shared session (ADR-010).
+const createMcpServerForClient = () => createSpiceBenchMcpServer({ session }).server;
+const MCP_HOST = "127.0.0.1";
+let mcpTransport: HttpTransportInstance | null = null;
 let mcpPort = parseInt(process.env["SPICEBENCH_MCP_PORT"] || "3100", 10);
 let mcpRunning = false;
 
@@ -53,9 +55,10 @@ function getMcpStatus() {
   return {
     running: mcpRunning,
     port: mcpPort,
-    host: "localhost",
-    sseUrl: `http://localhost:${mcpPort}/sse`,
-    activeSessions: 0,
+    host: MCP_HOST,
+    mcpUrl: `http://${MCP_HOST}:${mcpPort}/mcp`,
+    sseUrl: `http://${MCP_HOST}:${mcpPort}/sse`,
+    activeSessions: mcpTransport?.activeSessions() ?? 0,
     recentActions: session.getActionHistory(),
   };
 }
@@ -66,9 +69,9 @@ async function startMcpServer(port = mcpPort) {
   }
   try {
     mcpPort = port;
-    mcpTransport = await startHttpSseTransport(mcpInstance.server, { port: mcpPort, host: "localhost" });
+    mcpTransport = await startHttpTransport(createMcpServerForClient, { port: mcpPort, host: MCP_HOST });
     mcpRunning = true;
-    console.log(`[SpiceBench MCP]: Server running at http://localhost:${mcpPort}/sse`);
+    console.log(`[SpiceBench MCP]: Server running at ${mcpTransport.mcpUrl} (legacy SSE: ${mcpTransport.sseUrl})`);
     broadcastMcpStatus();
   } catch (err) {
     mcpRunning = false;
@@ -95,45 +98,15 @@ async function stopMcpServer() {
 }
 
 function getMcpClientConfigs() {
-  const sseUrl = `http://localhost:${mcpPort}/sse`;
+  const mcpUrl = `http://${MCP_HOST}:${mcpPort}/mcp`;
+  const json = (o: unknown) => JSON.stringify(o, null, 2);
 
-  const claudeDesktop = JSON.stringify(
-    {
-      mcpServers: {
-        spicebench: {
-          url: sseUrl,
-        },
-      },
-    },
-    null,
-    2
-  );
-
-  const cursor = JSON.stringify(
-    {
-      mcpServers: {
-        spicebench: {
-          url: sseUrl,
-        },
-      },
-    },
-    null,
-    2
-  );
-
-  const antigravity = JSON.stringify(
-    {
-      mcp: {
-        servers: {
-          spicebench: {
-            url: sseUrl,
-          },
-        },
-      },
-    },
-    null,
-    2
-  );
+  // Claude Desktop config file supports stdio servers only: bridge to HTTP via mcp-remote.
+  const claudeDesktop = json({
+    mcpServers: { spicebench: { command: "npx", args: ["-y", "mcp-remote", mcpUrl] } },
+  });
+  const cursor = json({ mcpServers: { spicebench: { url: mcpUrl } } });
+  const antigravity = json({ mcpServers: { spicebench: { serverUrl: mcpUrl } } });
 
   return { claudeDesktop, cursor, antigravity };
 }

@@ -6,6 +6,14 @@ import {
   Component,
 } from "@spicebench/core";
 import { getModelDefinition, getSubcircuitDefinition } from "./models";
+import {
+  OHMMETER_TEST_CURRENT,
+  deriveAcSweep,
+  deriveTranWindow,
+  getFunctionGeneratorSettings,
+  getMultimeterSettings,
+  isPinConnected,
+} from "./instrument-settings";
 import { SimulationMode } from "../parser/types";
 
 export interface TranOptions {
@@ -44,6 +52,9 @@ export interface CompiledNetlist {
   usedModels: string[];
   analysisDirective: string;
 }
+
+/** Formats a number as a SPICE value ("1meg", "10u", ...). */
+const sv = (v: number): string => parseEngineeringValue(v).spiceValue;
 
 export class NetlistCompiler {
   /**
@@ -85,7 +96,15 @@ export class NetlistCompiler {
 
     // 2. Translate Components
     for (const comp of graph.getAllComponents()) {
-      const compLines = NetlistCompiler.translateComponent(comp, getNode, usedModels, usedSubcircuits);
+      const connected = (pinId: string) => isPinConnected(nets, comp.id, pinId);
+      const compLines = NetlistCompiler.translateComponent(
+        comp,
+        getNode,
+        usedModels,
+        usedSubcircuits,
+        graph,
+        connected,
+      );
       if (compLines.length > 0) {
         lines.push(...compLines);
       }
@@ -141,6 +160,8 @@ export class NetlistCompiler {
     getNode: (comp: string, pin: string) => string,
     usedModels: Set<string>,
     usedSubcircuits: Set<string>,
+    graph: CircuitGraph,
+    connected: (pinId: string) => boolean,
   ): string[] {
     const lines: string[] = [];
 
@@ -424,59 +445,64 @@ export class NetlistCompiler {
 
       // Virtual Instruments
       case "MULTIMETER": {
+        // A meter with a dangling probe measures nothing and must not create floating nodes.
+        if (!connected("pos") || !connected("neg")) break;
         const nPos = getNode(comp.id, "pos");
         const nNeg = getNode(comp.id, "neg");
-        if (comp.params["mode"] === "A") {
-          // Ammeter mode: 0V sense voltage source
-          lines.push(`V_${comp.id}_sense ${nPos} ${nNeg} 0V`);
+        const { mode } = getMultimeterSettings(graph, comp);
+        if (mode === "A") {
+          // Ammeter: 0 V sense source; i(V) > 0 when current enters the "+" terminal.
+          lines.push(`V_${comp.id}_sense ${nPos} ${nNeg} DC 0`);
+        } else if (mode === "R") {
+          // Ohmmeter: test current pushed out of "+" into the circuit; R = V(+,-) / I.
+          lines.push(`I_${comp.id}_ohm ${nNeg} ${nPos} DC ${sv(OHMMETER_TEST_CURRENT)}`);
         } else {
-          // Voltmeter mode: 10Meg input impedance
+          // Voltmeter (V, dB): 10 MOhm input impedance.
           lines.push(`R_${comp.id}_sense ${nPos} ${nNeg} 10meg`);
         }
         break;
       }
 
       case "FUNCTION_GENERATOR": {
+        // "+" = signal relative to COM, "-" = inverted signal relative to COM (EWB semantics).
+        if (!connected("com") || (!connected("pos") && !connected("neg"))) break;
         const nPos = getNode(comp.id, "pos");
         const nCom = getNode(comp.id, "com");
-        const ampl = parseEngineeringValue(comp.params["amplitude"] ?? "5V").spiceValue;
-        const freq = parseEngineeringValue(comp.params["frequency"] ?? "1kHz").spiceValue;
-        const waveform = comp.params["waveform"] || "sine";
-
-        if (waveform === "sine") {
-          lines.push(`V_${comp.id} ${nPos} ${nCom} SIN(0 ${ampl} ${freq}) AC ${ampl}`);
-        } else if (waveform === "square") {
-          const fNum = parseEngineeringValue(comp.params["frequency"] ?? "1kHz").value;
-          const period = parseEngineeringValue(1 / fNum).spiceValue;
-          const half = parseEngineeringValue(0.5 / fNum).spiceValue;
-          lines.push(`V_${comp.id} ${nPos} ${nCom} PULSE(-${ampl} ${ampl} 0 1n 1n ${half} ${period})`);
+        const nNeg = getNode(comp.id, "neg");
+        const g = getFunctionGeneratorSettings(graph, comp);
+        const A = g.amplitudeV;
+        const per = 1 / g.frequencyHz;
+        const duty = g.dutyCycle / 100;
+        let wave: string;
+        if (g.waveform === "sine") {
+          wave = `SIN(${sv(g.offsetV)} ${sv(A)} ${sv(g.frequencyHz)})`;
+        } else if (g.waveform === "square") {
+          const edge = Math.min(1e-9, per / 1000);
+          const pw = Math.max(edge, duty * per - edge);
+          wave = `PULSE(${sv(g.offsetV - A)} ${sv(g.offsetV + A)} 0 ${sv(edge)} ${sv(edge)} ${sv(pw)} ${sv(per)})`;
         } else {
-          // Triangle
-          const fNum = parseEngineeringValue(comp.params["frequency"] ?? "1kHz").value;
-          const period = parseEngineeringValue(1 / fNum).spiceValue;
-          const half = parseEngineeringValue(0.5 / fNum).spiceValue;
-          lines.push(`V_${comp.id} ${nPos} ${nCom} PULSE(-${ampl} ${ampl} 0 ${half} ${half} 1n ${period})`);
+          // Triangle: rise for duty*T, fall for the rest; pulse width ~0.
+          const tr = duty * per;
+          const tf = per - tr;
+          wave = `PULSE(${sv(g.offsetV - A)} ${sv(g.offsetV + A)} 0 ${sv(tr)} ${sv(tf)} ${sv(per / 1e6)} ${sv(per)})`;
         }
+        lines.push(`V_${comp.id} ${nPos} ${nCom} DC ${sv(g.offsetV)} AC ${sv(A)} ${wave}`);
+        if (connected("neg")) lines.push(`E_${comp.id}_neg ${nNeg} ${nCom} ${nPos} ${nCom} -1`);
         break;
       }
 
       case "OSCILLOSCOPE": {
-        const nAPos = getNode(comp.id, "ch_a_pos");
-        const nANeg = getNode(comp.id, "ch_a_neg");
-        const nBPos = getNode(comp.id, "ch_b_pos");
-        const nBNeg = getNode(comp.id, "ch_b_neg");
-        lines.push(`R_${comp.id}_chA ${nAPos} ${nANeg} 1meg`);
-        lines.push(`R_${comp.id}_chB ${nBPos} ${nBNeg} 1meg`);
+        // Unconnected "-" input is referenced to ground; unconnected channel emits nothing.
+        const ref = (pin: string) => (connected(pin) ? getNode(comp.id, pin) : "0");
+        if (connected("ch_a_pos")) lines.push(`R_${comp.id}_chA ${getNode(comp.id, "ch_a_pos")} ${ref("ch_a_neg")} 1meg`);
+        if (connected("ch_b_pos")) lines.push(`R_${comp.id}_chB ${getNode(comp.id, "ch_b_pos")} ${ref("ch_b_neg")} 1meg`);
         break;
       }
 
       case "BODE_PLOTTER": {
-        const nInPos = getNode(comp.id, "in_pos");
-        const nInNeg = getNode(comp.id, "in_neg");
-        const nOutPos = getNode(comp.id, "out_pos");
-        const nOutNeg = getNode(comp.id, "out_neg");
-        lines.push(`R_${comp.id}_in ${nInPos} ${nInNeg} 10meg`);
-        lines.push(`R_${comp.id}_out ${nOutPos} ${nOutNeg} 10meg`);
+        const ref = (pin: string) => (connected(pin) ? getNode(comp.id, pin) : "0");
+        if (connected("in_pos")) lines.push(`R_${comp.id}_in ${getNode(comp.id, "in_pos")} ${ref("in_neg")} 10meg`);
+        if (connected("out_pos")) lines.push(`R_${comp.id}_out ${getNode(comp.id, "out_pos")} ${ref("out_neg")} 10meg`);
         break;
       }
     }
@@ -484,14 +510,24 @@ export class NetlistCompiler {
     return lines;
   }
 
+  /**
+   * Single analysis for a run without an explicit mode. Deterministic priority,
+   * independent of component order: Bode plotter -> .ac; anything time-dependent -> .tran; else .op.
+   * (CircuitSession runs every analysis the instruments need; see ADR-011.)
+   */
   private static detectSimulationMode(graph: CircuitGraph): SimulationMode {
-    for (const comp of graph.getAllComponents()) {
-      if (comp.type === "BODE_PLOTTER") return "ac";
-      if (comp.type === "OSCILLOSCOPE") return "tran";
-      if (comp.type === "AC_VOLTAGE_SOURCE") return "tran";
-      if (comp.type === "PULSE_VOLTAGE_SOURCE") return "tran";
-    }
-    return "op";
+    const comps = graph.getAllComponents();
+    if (comps.some((c) => c.type === "BODE_PLOTTER")) return "ac";
+    const timeDependent = comps.some(
+      (c) =>
+        c.type === "OSCILLOSCOPE" ||
+        c.type === "AC_VOLTAGE_SOURCE" ||
+        c.type === "PULSE_VOLTAGE_SOURCE" ||
+        c.type === "FUNCTION_GENERATOR" ||
+        c.type === "TIMER_555" ||
+        (c.type === "MULTIMETER" && getMultimeterSettings(graph, c).coupling === "AC"),
+    );
+    return timeDependent ? "tran" : "op";
   }
 
   private static buildAnalysisDirective(
@@ -515,8 +551,9 @@ export class NetlistCompiler {
           const tstart = options.tran.tstart ? ` ${options.tran.tstart}` : "";
           return `.tran ${tstep} ${tstop}${tstart}${uic}`;
         }
-        // Default transient parameters based on components
-        return `.tran 10u 10m${uic}`;
+        // Derived from instruments: one scope screen / generator periods (ADR-011)
+        const w = deriveTranWindow(graph);
+        return `.tran ${sv(w.tstep)} ${sv(w.tstop)}${uic}`;
       }
 
       case "ac": {
@@ -525,7 +562,8 @@ export class NetlistCompiler {
           const pts = options.ac.points ?? 20;
           return `.ac ${scale} ${pts} ${options.ac.fstart} ${options.ac.fstop}`;
         }
-        return ".ac dec 20 10 100k";
+        const a = deriveAcSweep(graph);
+        return `.ac dec ${a.points} ${sv(a.fstart)} ${sv(a.fstop)}`;
       }
 
       case "dc": {

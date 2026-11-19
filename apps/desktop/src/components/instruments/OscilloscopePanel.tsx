@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import type { OscilloscopeState, Component } from "@spicebench/core";
 import type { SimulationSummary } from "@spicebench/mcp";
-import type { TranResult } from "@spicebench/sim";
 
 export interface OscilloscopePanelProps {
   component: Component;
@@ -88,27 +87,21 @@ export const OscilloscopePanel: React.FC<OscilloscopePanelProps> = ({
     ctx.stroke();
 
     // 3. Render Waveforms if Transient simulation data is available
-    if (simulation && simulation.rawResult?.data) {
-      const tran = simulation.rawResult.data as TranResult;
-      if (tran && tran.time && tran.variables) {
+    // Data comes pre-computed from the backend (ADR-011): differential A/B traces of THIS scope.
+    const scope = simulation?.instruments?.[component.id];
+    if (scope && scope.type === "OSCILLOSCOPE" && scope.status === "ok") {
+      const variables: Record<string, number[]> = {};
+      if (scope.chA) variables["chA"] = scope.chA;
+      if (scope.chB) variables["chB"] = scope.chB;
+      const tran = { time: scope.time, variables };
+      {
         const timeArr = tran.time;
         const totalDuration = getTimebaseSec(state.timebase) * xDivs;
         const chAVoltsPerDiv = getVoltScale(state.chA.scale);
         const chBVoltsPerDiv = getVoltScale(state.chB.scale);
 
-        // Find candidate variables for Channel A & B
-        const chAVarKey = Object.keys(tran.variables).find(
-          (k) =>
-            k.includes(`${component.id}:ch_a_pos`) ||
-            k.includes("v(1)") ||
-            k.includes("v(pos)")
-        );
-        const chBVarKey = Object.keys(tran.variables).find(
-          (k) =>
-            k.includes(`${component.id}:ch_b_pos`) ||
-            k.includes("v(2)") ||
-            k.includes("v(out)")
-        );
+        const chAVarKey = scope.chA ? "chA" : undefined;
+        const chBVarKey = scope.chB ? "chB" : undefined;
 
         // Draw Channel A (Red/Pink trace)
         if (state.chA.coupling !== "0" && chAVarKey && tran.variables[chAVarKey]) {

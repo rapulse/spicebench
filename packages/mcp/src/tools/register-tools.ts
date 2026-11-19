@@ -1,3 +1,4 @@
+import { SimulationError } from "@spicebench/sim";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CircuitSession } from "../session/circuit-session";
 import {
@@ -290,14 +291,8 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(
-                {
-                  ok: true,
-                  data: summary,
-                },
-                null,
-                2,
-              ),
+              // rawResult holds every simulated point (can be megabytes): not for the agent.
+              text: JSON.stringify({ ok: true, data: { ...summary, rawResult: undefined } }, null, 2),
             },
           ],
         };
@@ -405,6 +400,7 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
 
 function createErrorResponse(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
+  const details = err instanceof SimulationError ? err.details : undefined;
   return {
     content: [
       {
@@ -413,8 +409,15 @@ function createErrorResponse(err: unknown) {
           {
             ok: false,
             error: {
-              code: "MCP_TOOL_ERROR",
+              code: details?.code ?? "MCP_TOOL_ERROR",
               message,
+              ...(details
+                ? {
+                    componentIds: details.componentIds ?? [],
+                    spiceElements: details.problematicComponents ?? [],
+                    nodes: details.problematicNodes ?? [],
+                  }
+                : {}),
             },
           },
           null,

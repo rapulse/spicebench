@@ -172,7 +172,7 @@ export const McpServerDialog: React.FC<McpServerDialogProps> = ({
                   <input
                     type="text"
                     readOnly
-                    value={status?.sseUrl || `http://localhost:${targetPort}/sse`}
+                    value={status?.mcpUrl || `http://127.0.0.1:${targetPort}/mcp`}
                     style={{ flex: 1, backgroundColor: "#ffffff" }}
                   />
                 </div>

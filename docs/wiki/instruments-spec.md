@@ -11,6 +11,11 @@
 2. **Инструментальное состояние (`InstrumentState`)**:
    - Хранит координаты открытого окна (`windowPosition: { x, y }`), флаг видимости (`isOpen: boolean`) и ручки управления прибора (шкалы, диапазоны, режимы).
    - Сериализуется в массив `instruments: InstrumentState[]` корневого документа `CircuitProject`.
+3. **Единый источник правды для настроек (ADR-011).** Настройки (`mode`, `currentType`, `waveform`,
+   `frequency`, `amplitude`, `offset`, `dutyCycle`, `timebase`, `fstart`, `fstop`) есть и в
+   `component.params`, и в `InstrumentState`. Компилятор берёт `InstrumentState`, если он есть.
+   `CircuitSession` синхронизирует обе стороны: при `placeComponent` состояние создаётся из params,
+   `updateComponent` зеркалит params в состояние, `updateInstrument` зеркалит состояние в params.
 
 ## 2. Спецификация приборов
 
@@ -69,5 +74,22 @@
   - `phase` (ФЧХ) — фазовый сдвиг в градусах (-180° ... +180°).
 
 ## 3. IPC и API
-- `spicebench:update-instrument`: сохраняет обновлённое состояние прибора и синхронизирует схему.
-- `spicebench:read-instrument`: вычисляет показания прибора на основе последнего расчёта `ngspice` (или при необходимости автоматически инициирует OP/TRAN/AC анализ).
+- `spicebench:update-instrument`: сохраняет состояние прибора (и зеркалит его в params). Чтобы
+  показания обновились при включённом питании, UI должен вызвать `run-simulation` заново.
+- `spicebench:run-simulation` без аргументов = «Power On»: в `SimulationSummary.instruments[id]`
+  приходят готовые данные каждого прибора.
+- `spicebench:read-instrument`: то же самое в форме `InstrumentReading` (для MCP).
+
+## 4. Данные приборов (`SimulationSummary.instruments`, ADR-011)
+Расчёт: `packages/sim/src/instruments/instrument-data.ts`. **Renderer ничего не пересчитывает и не
+выбирает векторы сам — только рисует.** Если измерить нельзя, `value`/трасса равны `null` и
+выставляется `status`.
+
+| Прибор | Поля | Семантика |
+| :--- | :--- | :--- |
+| `MULTIMETER` | `status, mode (V/A/R/dB), coupling (DC/AC), value, unit (V/A/Ohm/dB), source (op/tran), note?` | V: `V(+)−V(−)`, вход 10 МОм. A: последовательный источник 0 В, `>0` — ток входит в «+». R: тестовый ток 1 мА, `R = V/I`; при активных источниках в схеме `status: "invalid"` (как в EWB, омметр — только для пассивной цепи). DC по `.tran` — среднее, AC — RMS переменной составляющей, оба по целому числу периодов самого медленного источника во второй половине окна. dB: `20·log10(|V|/1 В)` (опорный уровень **требует сверки с EWB 5.12**). |
+| `OSCILLOSCOPE` | `status, timebaseSecPerDiv, time[], chA[] \| null, chB[] \| null` | Дифференциально `V(A+)−V(A−)`; неподключённый «−» = земля; неподключённый «+» — `null`. Окно = 10 делений × timebase (если `tran` не задан явно). |
+| `BODE_PLOTTER` | `status, fstartHz, fstopHz, frequency[], magnitudeDb[], phaseDeg[]` | `H = V(OUT+,OUT−)/V(IN+,IN−)` (не зависит от амплитуды источника), фаза развёрнута. Нужен AC-источник (генератор или `AC_VOLTAGE_SOURCE`), иначе `status: "no_data"`. |
+| `FUNCTION_GENERATOR` | `waveform, frequencyHz, amplitudeV, offsetV, dutyCycle` | «+» — сигнал относительно COM, «−» — инверсный сигнал относительно COM. Амплитуда — пиковая. Без подключённого COM генератор в нетлист не попадает. |
+
+Неподключённые выводы приборов в нетлист не попадают: висячий узел дал бы singular matrix на всю схему.

@@ -22,6 +22,9 @@ export interface McpServerStatus {
   running: boolean;
   port: number;
   host: string;
+  /** Streamable HTTP endpoint (preferred). */
+  mcpUrl: string;
+  /** Legacy SSE endpoint for older clients. */
   sseUrl: string;
   activeSessions: number;
   recentActions: AgentActionLog[];

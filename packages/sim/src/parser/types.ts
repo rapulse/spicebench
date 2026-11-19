@@ -47,4 +47,6 @@ export interface SimulationErrorDetails {
   rawOutput?: string;
   problematicNodes?: string[];
   problematicComponents?: string[];
+  /** Circuit component ids resolved from SPICE element names (filled by CircuitSession). */
+  componentIds?: string[];
 }

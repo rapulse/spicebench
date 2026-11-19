@@ -12,12 +12,22 @@
    - Используется по умолчанию (`spicebench-mcp --transport stdio`).
    - Идеален для интеграции с локальными Claude Desktop и Cursor (`command: "node", args: ["<path>/packages/mcp/dist/cli.js"]`).
    - Логирование строго перенаправляется в `stderr`, сохраняя `stdout` чистым для JSON-RPC сообщений.
-2. **Локальный Streamable HTTP/SSE:**
-   - Запуск через флаг `--transport http --port 3100`.
+2. **Локальный HTTP (ADR-010):**
+   - Запуск: `--transport http --port 3100`. Electron Main поднимает этот же сервер автоматически.
+   - Слушает только loopback (`127.0.0.1`). Привязку к адресу не-loopback сервер отклоняет.
    - Эндпоинты:
-     - `GET /health` — проверка статуса сервера и количества активных сессий.
-     - `GET /sse` — установка SSE-потока событий.
-     - `POST /messages?sessionId=...` — отправка JSON-RPC команд на сервер.
+     - `POST|GET|DELETE /mcp` — **Streamable HTTP** (основной; сессии через заголовок `Mcp-Session-Id`).
+     - `GET /sse` + `POST /messages?sessionId=...` — legacy HTTP+SSE для старых клиентов.
+     - `GET /health` — статус и число активных сессий.
+   - Каждый клиент получает свой экземпляр `McpServer` поверх **общего** `CircuitSession`:
+     несколько агентов и GUI видят одну схему.
+   - Безопасность: `Host` должен быть loopback (защита от DNS rebinding). Запрос с заголовком `Origin`
+     принимается только с loopback-origin (например, MCP Inspector). CORS без `*`: отражается
+     разрешённый origin. Чужая веб-страница получает 403.
+   - Конфиги клиентов (меню MCP в приложении): Cursor `{"url": "http://127.0.0.1:3100/mcp"}`;
+     Claude Desktop через мост `npx -y mcp-remote http://127.0.0.1:3100/mcp` (конфиг-файл Claude
+     Desktop поддерживает только stdio); Claude Code
+     `claude mcp add --transport http spicebench http://127.0.0.1:3100/mcp`.
 
 ## 3. Реестр инструментов (Фаза 3.2)
 
@@ -90,30 +100,29 @@
   ```
 
 ### 7. `run_simulation`
-Компилирует граф схемы в SPICE-нетлист, выполняет моделирование в изолированном Node Worker с таймаутом (5 с) и возвращает структурированные результаты.
-- **Вход:**
-  - `mode?: "op" | "tran" | "ac" | "dc"`
-  - `tran?: { tstep?: string, tstop: string, tstart?: string, uic?: boolean }`
-  - `ac?: { scale?: "dec" | "oct" | "lin", points?: number, fstart: string, fstop: string }`
-  - `dc?: { source: string, vstart: number, vstop: number, vstep: number }`
-  - `timeoutMs?: number`
-- **Особенность:** возвращает поле `pinVoltages` (напряжения на конкретных ножках деталей, например `{"R1:2": 5.0, "V1:pos": 10.0}`), что избавляет ИИ-агента от необходимости сопоставлять внутренние технические номера SPICE-узлов (`N001`).
+Компилирует граф в SPICE-нетлист и считает на ngspice-45.2 (WASM, воркер, таймаут 5 с, ADR-007).
+- **Вход:** `mode?`, `tran?`, `ac?`, `dc?`, `timeoutMs?` (как раньше).
+- **Без `mode` = «Power On» (ADR-011):** выполняются все анализы, нужные приборам схемы: Боде → `.ac`,
+  осциллограф, генераторы и AC-мультиметр → `.tran`, DC-мультиметр и омметр → `.op`. Окно `.tran`
+  и диапазон `.ac`, если их не задали явно, выводятся из настроек приборов (10 делений × timebase,
+  ≥ 50 точек на период генератора; fstart/fstop Боде, 50 точек на декаду).
+- **Ответ `data`:** `mode`, `analyses[]`, `engine`, `warnings[]`, `pinVoltages`, `nodeVoltages`,
+  `branchCurrents`, `timeRange`, `signalsSummary`, `samples` (≤ 40 точек), `acSummary` (пик только
+  по напряжениям узлов), **`instruments`** (показания каждого прибора, см. instruments-spec §4).
+  Внутренние векторы подсхем (`v(x_u1.int)`) исключены. `rawResult` агенту **не отправляется**.
+- **Ошибка:** `{ ok: false, error: { code: "SPICE_ERROR" | "SIMULATION_TIMEOUT" | "ENGINE_ERROR" |
+  "PARSE_ERROR" | "MCP_TOOL_ERROR", message, componentIds[], spiceElements[], nodes[] } }`.
+  `componentIds` — ID компонентов схемы (например `D1`), сопоставленные с элементами SPICE (`d_d1`).
 
 ### 8. `read_instrument`
-Считывает показания подключённых виртуальных приборов.
-- **Вход:**
-  - `instrumentId`: string (`XMM1`, `XSC1`, `XBP1`)
-- **Ответ для мультиметра:**
+Возвращает те же числа, что показывает окно прибора: из последнего «Power On», а если схема изменилась, прогоняет его заново.
+- **Вход:** `instrumentId` (`XMM1`, `XSC1`, `XBP1`, `XFG1`).
+- **Ответ:** `{ instrumentId, type, status: "ok" | "not_connected" | "no_data" | "invalid", readings, formatted }`.
+  При статусе, отличном от `ok`, значения равны `null`, а не 0.
   ```json
-  {
-    "ok": true,
-    "data": {
-      "instrumentId": "XMM1",
-      "type": "MULTIMETER",
-      "readings": { "mode": "V", "value": 4.9975, "unit": "V" },
-      "formatted": "+4.9975 V"
-    }
-  }
+  { "instrumentId": "XMM1", "type": "MULTIMETER", "status": "ok",
+    "readings": { "mode": "V", "coupling": "AC", "value": 0.4997, "unit": "V", "source": "tran" },
+    "formatted": "499.690 mV AC" }
   ```
 
 ### Вспомогательные инструменты

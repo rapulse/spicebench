@@ -4,9 +4,11 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import http from "node:http";
 import {
   createSpiceBenchMcpServer,
-  startHttpSseTransport,
+  startHttpTransport,
   CircuitSession,
 } from "../src/index";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
 describe("Phase 3: Autonomous MCP Server & Tools Integration", () => {
   let client: Client;
@@ -324,27 +326,211 @@ describe("Phase 3: Autonomous MCP Server & Tools Integration", () => {
     expect(simParsed.error.message).toContain("VOLTAGE_SOURCE_LOOP");
   });
 
-  it("launches and responds to HTTP discovery/health endpoint over HTTP transport", async () => {
-    const testPort = 3198;
-    const instance = createSpiceBenchMcpServer();
-    const httpInstance = await startHttpSseTransport(instance.server, { port: testPort });
-
+  it("serves /health on loopback", async () => {
+    const shared = new CircuitSession();
+    const httpInstance = await startHttpTransport(() => createSpiceBenchMcpServer({ session: shared }).server, {
+      port: 0,
+    });
     try {
-      const response = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-        http.get(`http://localhost:${testPort}/health`, (res) => {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data }));
-          res.on("error", reject);
-        });
-      });
-
-      expect(response.status).toBe(200);
-      const json = JSON.parse(response.body);
+      const res = await rawRequest(httpInstance.port, "GET", "/health");
+      expect(res.status).toBe(200);
+      const json = JSON.parse(res.body);
       expect(json.status).toBe("ok");
       expect(json.service).toBe("SpiceBench MCP Server");
+      expect(json.mcpEndpoint).toBe("/mcp");
     } finally {
       await httpInstance.close();
+      await shared.dispose();
+    }
+  });
+});
+
+function rawRequest(
+  port: number,
+  method: string,
+  path: string,
+  headers: Record<string, string> = {},
+  body?: string,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: "127.0.0.1", port, method, path, headers }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data }));
+    });
+    req.on("error", reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+describe("ADR-010: HTTP transport (Streamable HTTP + legacy SSE, loopback security)", () => {
+  const initBody = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "t", version: "1" } },
+  });
+  const mcpHeaders = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
+
+  it("two Streamable HTTP clients and one legacy SSE client share one circuit", async () => {
+    const shared = new CircuitSession();
+    const httpInstance = await startHttpTransport(() => createSpiceBenchMcpServer({ session: shared }).server, {
+      port: 0,
+    });
+    const a = new Client({ name: "agent-a", version: "1" });
+    const b = new Client({ name: "agent-b", version: "1" });
+    const c = new Client({ name: "agent-legacy", version: "1" });
+    try {
+      await a.connect(new StreamableHTTPClientTransport(new URL(httpInstance.mcpUrl)));
+      await b.connect(new StreamableHTTPClientTransport(new URL(httpInstance.mcpUrl)));
+      await c.connect(new SSEClientTransport(new URL(httpInstance.sseUrl)));
+      expect(httpInstance.activeSessions()).toBe(3);
+
+      await a.callTool({ name: "place_component", arguments: { type: "RESISTOR", id: "R7", x: 1, y: 1 } });
+      for (const client of [b, c]) {
+        const state = await client.callTool({ name: "get_circuit_state", arguments: {} });
+        const text = (state.content as Array<{ text: string }>)[0]!.text;
+        expect(text).toContain("R7");
+      }
+      // Client A still works after B and C connected (old single-McpServer bug)
+      const tools = await a.listTools();
+      expect(tools.tools.length).toBeGreaterThan(5);
+    } finally {
+      await Promise.allSettled([a.close(), b.close(), c.close()]);
+      await httpInstance.close();
+      await shared.dispose();
+    }
+  });
+
+  it("rejects foreign browser Origin and non-loopback Host (DNS rebinding); no wildcard CORS", async () => {
+    const shared = new CircuitSession();
+    const httpInstance = await startHttpTransport(() => createSpiceBenchMcpServer({ session: shared }).server, {
+      port: 0,
+    });
+    try {
+      const evil = await rawRequest(httpInstance.port, "POST", "/mcp", { ...mcpHeaders, Origin: "https://evil.example" }, initBody);
+      expect(evil.status).toBe(403);
+
+      const rebind = await rawRequest(httpInstance.port, "POST", "/mcp", { ...mcpHeaders, Host: "evil.example:3100" }, initBody);
+      expect(rebind.status).toBe(403);
+
+      const sse = await rawRequest(httpInstance.port, "GET", "/health", { Origin: "https://evil.example" });
+      expect(sse.status).toBe(403);
+
+      // Loopback origin (e.g. MCP Inspector) is allowed and gets its own origin echoed, not "*"
+      const ok = await new Promise<{ status: number; acao?: string }>((resolve, reject) => {
+        const req = http.request(
+          { host: "127.0.0.1", port: httpInstance.port, method: "OPTIONS", path: "/mcp", headers: { Origin: "http://localhost:6274" } },
+          (res) => {
+            res.resume();
+            resolve({ status: res.statusCode ?? 0, acao: res.headers["access-control-allow-origin"] as string });
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+      expect(ok.status).toBe(204);
+      expect(ok.acao).toBe("http://localhost:6274");
+
+      // Non-initialize request without session -> 400
+      const noSession = await rawRequest(
+        httpInstance.port,
+        "POST",
+        "/mcp",
+        mcpHeaders,
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+      );
+      expect(noSession.status).toBe(400);
+    } finally {
+      await httpInstance.close();
+      await shared.dispose();
+    }
+  });
+
+  it("refuses to bind to a non-loopback address", async () => {
+    await expect(
+      startHttpTransport(() => createSpiceBenchMcpServer().server, { port: 0, host: "0.0.0.0" }),
+    ).rejects.toThrow(/non-loopback/);
+  });
+});
+
+describe("ADR-011: session results for agents", () => {
+  it("maps ngspice errors to circuit component ids and keeps rawResult out of run_simulation", async () => {
+    const session = new CircuitSession();
+    const { server } = createSpiceBenchMcpServer({ session });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "t", version: "1" });
+    await Promise.all([server.connect(st), client.connect(ct)]);
+    try {
+      const call = async (name: string, args: Record<string, unknown>) => {
+        const r = await client.callTool({ name, arguments: args });
+        return JSON.parse((r.content as Array<{ text: string }>)[0]!.text);
+      };
+      await call("place_component", { type: "DC_VOLTAGE_SOURCE", id: "V1", x: 0, y: 0, params: { voltage: "5V" } });
+      await call("place_component", { type: "RESISTOR", id: "R1", x: 5, y: 0, params: { resistance: "1k" } });
+      await call("place_component", { type: "DIODE", id: "D1", x: 10, y: 0, params: { model: "NO_SUCH_MODEL" } });
+      await call("place_component", { type: "GROUND", id: "GND1", x: 0, y: 5 });
+      for (const [a, ap, b, bp] of [
+        ["V1", "pos", "R1", "1"],
+        ["R1", "2", "D1", "anode"],
+        ["D1", "cathode", "GND1", "0"],
+        ["V1", "neg", "GND1", "0"],
+      ]) {
+        await call("connect_pins", { fromComponentId: a, fromPinId: ap, toComponentId: b, toPinId: bp });
+      }
+
+      const bad = await call("run_simulation", { mode: "op" });
+      expect(bad.ok).toBe(false);
+      expect(bad.error.code).toBe("SPICE_ERROR");
+      expect(bad.error.componentIds).toContain("D1");
+
+      await call("update_component", { id: "D1", params: { model: "1N4148" } });
+      const good = await call("run_simulation", { mode: "op" });
+      expect(good.ok).toBe(true);
+      expect(good.data.rawResult).toBeUndefined();
+      expect(good.data.engine).toBe("ngspice-wasm");
+      expect(good.data.pinVoltages["D1:anode"]).toBeGreaterThan(0.6);
+    } finally {
+      await client.close();
+      await session.dispose();
+    }
+  });
+});
+
+describe("ADR-011: instrument settings single source of truth", () => {
+  it("place_component params initialize the instrument window state; window edits reach params", async () => {
+    const session = new CircuitSession();
+    try {
+      session.placeComponent({
+        type: "FUNCTION_GENERATOR",
+        id: "XFG1",
+        x: 0,
+        y: 0,
+        params: { amplitude: "1V", frequency: "2kHz", offset: "0.5V" },
+      });
+      session.placeComponent({ type: "MULTIMETER", id: "XMM1", x: 5, y: 0, params: { currentType: "AC" } });
+      const fg = session.getGraph().getInstrument("XFG1") as Record<string, unknown>;
+      expect(fg["amplitude"]).toBe("1V");
+      expect(fg["frequency"]).toBe("2kHz");
+      expect(fg["offset"]).toBe("0.5V");
+      expect((session.getGraph().getInstrument("XMM1") as Record<string, unknown>)["currentType"]).toBe("AC");
+
+      // Agent edit after creation is mirrored into the window state
+      session.updateComponent({ id: "XFG1", params: { amplitude: "3V" } });
+      expect((session.getGraph().getInstrument("XFG1") as Record<string, unknown>)["amplitude"]).toBe("3V");
+
+      // Window edit is mirrored into params (what get_circuit_state shows)
+      session.updateInstrument({ ...(session.getGraph().getInstrument("XFG1") as never), frequency: "5kHz" });
+      expect(session.getGraph().getComponent("XFG1")!.params["frequency"]).toBe("5kHz");
+      session.placeComponent({ type: "RESISTOR", id: "RL", x: 10, y: 0, params: { resistance: "1k" } });
+      session.placeComponent({ type: "GROUND", id: "GND1", x: 0, y: 5 });
+      session.connectPins({ from: { componentId: "XFG1", pinId: "pos" }, to: { componentId: "RL", pinId: "1" } });
+      session.connectPins({ from: { componentId: "RL", pinId: "2" }, to: { componentId: "GND1", pinId: "0" } });
+      session.connectPins({ from: { componentId: "XFG1", pinId: "com" }, to: { componentId: "GND1", pinId: "0" } });
+      expect(session.exportSpice({ mode: "tran" })).toMatch(/SIN\(500m 3 5k\)/);
+    } finally {
+      await session.dispose();
     }
   });
 });
