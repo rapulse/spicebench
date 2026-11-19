@@ -5,6 +5,9 @@ import { DESKTOP_VERSION } from "../src/index";
 import { SchematicSymbol } from "../src/components/SchematicSymbol";
 import { Canvas, findNearestPointOnWire } from "../src/components/Canvas";
 import { ComponentDialog } from "../src/components/ComponentDialog";
+import { InstrumentWindow } from "../src/components/InstrumentWindow";
+import { MultimeterPanel } from "../src/components/instruments/MultimeterPanel";
+import { FunctionGeneratorPanel } from "../src/components/instruments/FunctionGeneratorPanel";
 import type { Component, ComponentType, CircuitProject, Wire } from "@spicebench/core";
 import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
 import { CircuitSession } from "@spicebench/mcp";
@@ -269,6 +272,13 @@ describe("Desktop Package", () => {
         redo: async () => true,
         canUndo: async () => true,
         canRedo: async () => false,
+        updateInstrument: async () => {},
+        readInstrument: async () => ({
+          instrumentId: "M1",
+          type: "MULTIMETER",
+          readings: {},
+          formatted: "12.000 V",
+        }),
         loadSampleCircuit: async () => ({
           schemaVersion: 1,
           meta: { name: "Sample", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
@@ -292,6 +302,8 @@ describe("Desktop Package", () => {
       expect(typeof mockApi.redo).toBe("function");
       expect(typeof mockApi.canUndo).toBe("function");
       expect(typeof mockApi.canRedo).toBe("function");
+      expect(typeof mockApi.updateInstrument).toBe("function");
+      expect(typeof mockApi.readInstrument).toBe("function");
       expect(typeof mockApi.onCircuitUpdated).toBe("function");
     });
   });
@@ -428,6 +440,92 @@ describe("Desktop Package", () => {
       expect(recompiled.netlist).toContain("V1");
       expect(recompiled.netlist).toContain("R1");
       expect(recompiled.netlist).toContain(".end");
+    });
+  });
+
+  describe("Virtual Instruments (Phase 6)", () => {
+    it("renders draggable floating InstrumentWindow with title and body", () => {
+      const markup = renderToStaticMarkup(
+        React.createElement(
+          InstrumentWindow,
+          {
+            title: "Multimeter - M1",
+            position: { x: 100, y: 150 },
+            onMove: () => {},
+            onClose: () => {},
+          },
+          React.createElement("div", null, "Instrument Content")
+        )
+      );
+
+      expect(markup).toContain("Multimeter - M1");
+      expect(markup).toContain("Instrument Content");
+      expect(markup).toContain("left:100px");
+      expect(markup).toContain("top:150px");
+    });
+
+    it("renders MultimeterPanel with digital display and mode buttons", () => {
+      const comp: Component = {
+        id: "M1",
+        type: "MULTIMETER",
+        label: "M1",
+        position: { x: 10, y: 10 },
+        rotation: 0,
+        params: {},
+      };
+
+      const markup = renderToStaticMarkup(
+        React.createElement(MultimeterPanel, {
+          component: comp,
+          state: {
+            instrumentId: "M1",
+            isOpen: true,
+            windowPosition: { x: 100, y: 100 },
+            mode: "V",
+            currentType: "DC",
+          },
+          simulation: null,
+          onStateChange: () => {},
+        })
+      );
+
+      expect(markup).toContain("0.000 V");
+      expect(markup).toContain("Voltage (Volts)");
+      expect(markup).toContain("Current (Amperes)");
+      expect(markup).toContain("Direct Current (DC)");
+    });
+
+    it("renders FunctionGeneratorPanel with waveforms and frequency inputs", () => {
+      const comp: Component = {
+        id: "XFG1",
+        type: "FUNCTION_GENERATOR",
+        label: "XFG1",
+        position: { x: 10, y: 10 },
+        rotation: 0,
+        params: { frequency: "1kHz", voltage: "5V" },
+      };
+
+      const markup = renderToStaticMarkup(
+        React.createElement(FunctionGeneratorPanel, {
+          component: comp,
+          state: {
+            instrumentId: "XFG1",
+            isOpen: true,
+            windowPosition: { x: 100, y: 100 },
+            waveform: "sine",
+            frequency: "1kHz",
+            dutyCycle: 50,
+            amplitude: "5V",
+            offset: "0V",
+          },
+          onStateChange: () => {},
+        })
+      );
+
+      expect(markup).toContain("Sine");
+      expect(markup).toContain("Square");
+      expect(markup).toContain("Frequency:");
+      expect(markup).toContain("1kHz");
     });
   });
 });

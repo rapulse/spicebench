@@ -301,6 +301,23 @@ export class CircuitGraph {
     return junction;
   }
 
+  // --- Instruments ---
+  public getInstrument(id: string): InstrumentState | undefined {
+    return this.instruments.get(id);
+  }
+
+  public getAllInstruments(): InstrumentState[] {
+    return Array.from(this.instruments.values());
+  }
+
+  public setInstrument(instrument: InstrumentState): void {
+    this.instruments.set(instrument.instrumentId, { ...instrument });
+  }
+
+  public removeInstrument(id: string): boolean {
+    return this.instruments.delete(id);
+  }
+
   /**
    * Splits an existing wire at a specified point on its polyline,
    * inserting a Junction and creating two contiguous sub-wires.

@@ -4,6 +4,7 @@ import type {
   Wire,
   Junction,
   ValidationResult,
+  InstrumentState,
 } from "@spicebench/core";
 import type {
   CircuitStats,
@@ -13,6 +14,7 @@ import type {
   ConnectPinsOptions,
   ConnectToWireOptions,
   SimulationRunOptions,
+  InstrumentReading,
 } from "@spicebench/mcp";
 
 export interface SpicebenchApi {
@@ -39,6 +41,8 @@ export interface SpicebenchApi {
   redo: () => Promise<boolean>;
   canUndo: () => Promise<boolean>;
   canRedo: () => Promise<boolean>;
+  updateInstrument: (state: InstrumentState) => Promise<void>;
+  readInstrument: (instrumentId: string) => Promise<InstrumentReading>;
   loadSampleCircuit: (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => Promise<CircuitProject>;
   onCircuitUpdated: (callback: (circuit: CircuitProject) => void) => () => void;
   onSimulationUpdated: (callback: (summary: SimulationSummary | null) => void) => () => void;

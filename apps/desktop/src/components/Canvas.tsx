@@ -34,6 +34,7 @@ interface CanvasProps {
   }) => void;
   onWiringStatusChange?: (status: string | null) => void;
   onComponentDoubleClick?: (component: Component) => void;
+  children?: React.ReactNode;
 }
 
 const GRID_SPACING = 20; // 20 pixels per logical grid unit
@@ -111,6 +112,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onConnectToWire,
   onWiringStatusChange,
   onComponentDoubleClick,
+  children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -729,6 +731,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           )}
         </g>
       </svg>
+      {children}
     </div>
   );
 };

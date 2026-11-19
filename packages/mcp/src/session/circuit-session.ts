@@ -25,6 +25,7 @@ import {
   ConnectWireCommand,
   ConnectToWireCommand,
   BatchCommand,
+  InstrumentState,
 } from "@spicebench/core";
 import {
   NetlistCompiler,
@@ -113,6 +114,7 @@ export interface SimulationSummary {
     peakMagnitudeDb: number;
     peakMagnitudeLinear: number;
   };
+  rawResult?: SimulationResult;
 }
 
 export interface InstrumentReading {
@@ -204,6 +206,53 @@ export class CircuitSession {
     }
 
     this.commandManager.execute(new AddComponentCommand(comp), this.graph);
+
+    // Initialize default instrument state if component is a virtual instrument
+    if (type === "MULTIMETER" && !this.graph.getInstrument(comp.id)) {
+      this.graph.setInstrument({
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 120, y: 80 },
+        mode: "V",
+        currentType: "DC",
+      });
+    } else if (type === "FUNCTION_GENERATOR" && !this.graph.getInstrument(comp.id)) {
+      this.graph.setInstrument({
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 150, y: 100 },
+        waveform: "sine",
+        frequency: comp.params?.frequency || "1kHz",
+        dutyCycle: 50,
+        amplitude: comp.params?.voltage || "5V",
+        offset: "0V",
+      });
+    } else if (type === "OSCILLOSCOPE" && !this.graph.getInstrument(comp.id)) {
+      this.graph.setInstrument({
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 180, y: 120 },
+        timebase: "1ms/div",
+        xPos: 0,
+        chA: { scale: "5V/div", yPos: 0, coupling: "DC" },
+        chB: { scale: "5V/div", yPos: 0, coupling: "DC" },
+        trigger: { mode: "auto", edge: "positive", level: 0, source: "chA" },
+      });
+    } else if (type === "BODE_PLOTTER" && !this.graph.getInstrument(comp.id)) {
+      this.graph.setInstrument({
+        instrumentId: comp.id,
+        isOpen: false,
+        windowPosition: { x: 210, y: 140 },
+        mode: "magnitude",
+        scaleH: "log",
+        scaleV: "log",
+        fstart: "10Hz",
+        fstop: "100kHz",
+        vMin: -60,
+        vMax: 20,
+      });
+    }
+
     this.isDirty = true;
     return comp;
   }
@@ -298,11 +347,17 @@ export class CircuitSession {
           (isPinEndpoint(w.to) && w.to.componentId === id),
       );
     this.commandManager.execute(new RemoveComponentCommand(id), this.graph);
+    this.graph.removeInstrument(id);
     this.isDirty = true;
     return {
       removedComponentId: id,
       removedWireCount: removedWires.length,
     };
+  }
+
+  public updateInstrument(state: InstrumentState): void {
+    this.graph.setInstrument(state);
+    this.isDirty = true;
   }
 
   public connectPins(options: ConnectPinsOptions): Wire {
@@ -505,6 +560,7 @@ export class CircuitSession {
       mode: result.mode,
       success: result.success,
       durationMs: result.durationMs,
+      rawResult: result,
     };
 
     if (result.mode === "op") {

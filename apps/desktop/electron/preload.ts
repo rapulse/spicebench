@@ -22,6 +22,8 @@ const api: SpicebenchApi = {
   redo: () => ipcRenderer.invoke("spicebench:redo"),
   canUndo: () => ipcRenderer.invoke("spicebench:can-undo"),
   canRedo: () => ipcRenderer.invoke("spicebench:can-redo"),
+  updateInstrument: (state) => ipcRenderer.invoke("spicebench:update-instrument", state),
+  readInstrument: (id) => ipcRenderer.invoke("spicebench:read-instrument", id),
   loadSampleCircuit: (name) => ipcRenderer.invoke("spicebench:load-sample", name),
   onCircuitUpdated: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, circuit: CircuitProject) => callback(circuit);

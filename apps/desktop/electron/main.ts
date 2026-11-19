@@ -24,6 +24,18 @@ function loadSample(name: "voltage-divider" | "rc-step" | "rlc-filter") {
     session.connectPins({ from: { componentId: "R1", pinId: "2" }, to: { componentId: "R2", pinId: "1" } });
     session.connectPins({ from: { componentId: "R2", pinId: "2" }, to: { componentId: "GND1", pinId: "0" } });
     session.connectPins({ from: { componentId: "V1", pinId: "neg" }, to: { componentId: "GND1", pinId: "0" } });
+
+    // Default virtual multimeter attached across R2
+    session.placeComponent({ type: "MULTIMETER", id: "XMM1", x: 30, y: 15 });
+    session.connectPins({ from: { componentId: "R1", pinId: "2" }, to: { componentId: "XMM1", pinId: "pos" } });
+    session.connectPins({ from: { componentId: "R2", pinId: "2" }, to: { componentId: "XMM1", pinId: "neg" } });
+    session.updateInstrument({
+      instrumentId: "XMM1",
+      isOpen: true,
+      windowPosition: { x: 500, y: 80 },
+      mode: "V",
+      currentType: "DC",
+    });
   } else if (name === "rc-step") {
     session.placeComponent({ type: "DC_VOLTAGE_SOURCE", id: "V1", params: { voltage: "5V" }, x: 10, y: 10 });
     session.placeComponent({ type: "RESISTOR", id: "R1", params: { resistance: "1k" }, x: 20, y: 10 });
@@ -34,6 +46,21 @@ function loadSample(name: "voltage-divider" | "rc-step" | "rlc-filter") {
     session.connectPins({ from: { componentId: "R1", pinId: "2" }, to: { componentId: "C1", pinId: "1" } });
     session.connectPins({ from: { componentId: "C1", pinId: "2" }, to: { componentId: "GND1", pinId: "0" } });
     session.connectPins({ from: { componentId: "V1", pinId: "neg" }, to: { componentId: "GND1", pinId: "0" } });
+
+    // Default virtual oscilloscope attached across C1
+    session.placeComponent({ type: "OSCILLOSCOPE", id: "XSC1", x: 30, y: 15 });
+    session.connectPins({ from: { componentId: "R1", pinId: "2" }, to: { componentId: "XSC1", pinId: "ch_a_pos" } });
+    session.connectPins({ from: { componentId: "C1", pinId: "2" }, to: { componentId: "XSC1", pinId: "ch_a_neg" } });
+    session.updateInstrument({
+      instrumentId: "XSC1",
+      isOpen: true,
+      windowPosition: { x: 460, y: 70 },
+      timebase: "0.5ms/div",
+      xPos: 0,
+      chA: { scale: "1V/div", yPos: 0, coupling: "DC" },
+      chB: { scale: "5V/div", yPos: 0, coupling: "DC" },
+      trigger: { mode: "auto", edge: "positive", level: 0, source: "chA" },
+    });
   } else if (name === "rlc-filter") {
     session.placeComponent({ type: "AC_VOLTAGE_SOURCE", id: "V1", params: { voltage: "1V", frequency: "1kHz" }, x: 10, y: 10 });
     session.placeComponent({ type: "RESISTOR", id: "R1", params: { resistance: "10" }, x: 20, y: 10 });
@@ -189,6 +216,15 @@ function registerIpcHandlers() {
     return { filePath, name: path.basename(filePath) };
   });
 
+  ipcMain.handle("spicebench:update-instrument", (_e, state) => {
+    session.updateInstrument(state);
+    broadcastCircuitUpdate();
+  });
+
+  ipcMain.handle("spicebench:read-instrument", async (_e, id: string) => {
+    return session.readInstrument(id);
+  });
+
   ipcMain.handle("spicebench:load-sample", (_e, name) => {
     const circuit = loadSample(name);
     broadcastCircuitUpdate();
@@ -206,19 +242,43 @@ function createWindow() {
     title: "Electronics Workbench 5.12 — SpiceBench",
     backgroundColor: "#c0c0c0",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
   // Default initial sample circuit
-  loadSample("voltage-divider");
+  const initialSample = (process.env["SPICEBENCH_SAMPLE"] as "voltage-divider" | "rc-step" | "rlc-filter") || "voltage-divider";
+  loadSample(initialSample);
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
     mainWindow.loadURL(process.env["VITE_DEV_SERVER_URL"]);
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+  }
+
+  if (process.env["SPICEBENCH_SCREENSHOT_PATH"]) {
+    const screenshotPath = process.env["SPICEBENCH_SCREENSHOT_PATH"];
+    mainWindow.webContents.on("did-finish-load", () => {
+      setTimeout(async () => {
+        if (!mainWindow) return;
+        try {
+          if (process.env["SPICEBENCH_AUTO_SIMULATE"] === "1") {
+            const summary = await session.runSimulation();
+            broadcastSimulationUpdate(summary);
+            await new Promise((r) => setTimeout(r, 600));
+          }
+          const image = await mainWindow.webContents.capturePage();
+          await fs.writeFile(screenshotPath, image.toPNG());
+          console.log(`[SpiceBench Screenshot]: saved to ${screenshotPath}`);
+        } catch (err) {
+          console.error(`[SpiceBench Screenshot Error]:`, err);
+        } finally {
+          app.quit();
+        }
+      }, 1500);
+    });
   }
 
   mainWindow.on("closed", () => {

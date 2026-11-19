@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
-import type { CircuitProject, Component, ComponentType, Rotation } from "@spicebench/core";
+import type {
+  CircuitProject,
+  Component,
+  ComponentType,
+  Rotation,
+  InstrumentState,
+  MultimeterState,
+  FunctionGeneratorState,
+  OscilloscopeState,
+  BodePlotterState,
+} from "@spicebench/core";
 import { CURRENT_SCHEMA_VERSION } from "@spicebench/core";
 import type { CircuitStats, SimulationSummary } from "@spicebench/mcp";
 import { TitleBar } from "./components/TitleBar";
@@ -9,6 +19,11 @@ import { PartsBin } from "./components/PartsBin";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { ComponentDialog } from "./components/ComponentDialog";
+import { InstrumentWindow } from "./components/InstrumentWindow";
+import { MultimeterPanel } from "./components/instruments/MultimeterPanel";
+import { FunctionGeneratorPanel } from "./components/instruments/FunctionGeneratorPanel";
+import { OscilloscopePanel } from "./components/instruments/OscilloscopePanel";
+import { BodePlotterPanel } from "./components/instruments/BodePlotterPanel";
 
 const emptyCircuit: CircuitProject = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -361,9 +376,87 @@ export const App: React.FC = () => {
     }
   }, [refreshUndoState]);
 
-  const handleComponentDoubleClick = useCallback((comp: Component) => {
-    setEditingComponent(comp);
-  }, []);
+  const handleUpdateInstrument = useCallback(
+    async (state: InstrumentState) => {
+      if (window.spicebenchApi?.updateInstrument) {
+        try {
+          await window.spicebenchApi.updateInstrument(state);
+        } catch (err) {
+          console.error("Failed to update instrument state:", err);
+        }
+      } else {
+        setCircuit((prev) => {
+          const exists = prev.instruments.some((i) => i.instrumentId === state.instrumentId);
+          const nextInstruments = exists
+            ? prev.instruments.map((i) => (i.instrumentId === state.instrumentId ? state : i))
+            : [...prev.instruments, state];
+          return { ...prev, instruments: nextInstruments };
+        });
+      }
+    },
+    []
+  );
+
+  const handleComponentDoubleClick = useCallback(
+    (comp: Component) => {
+      if (
+        ["MULTIMETER", "FUNCTION_GENERATOR", "OSCILLOSCOPE", "BODE_PLOTTER"].includes(comp.type)
+      ) {
+        const currentInst = circuit.instruments.find((i) => i.instrumentId === comp.id);
+        if (currentInst) {
+          handleUpdateInstrument({ ...currentInst, isOpen: true });
+        } else {
+          if (comp.type === "MULTIMETER") {
+            handleUpdateInstrument({
+              instrumentId: comp.id,
+              isOpen: true,
+              windowPosition: { x: 120, y: 80 },
+              mode: "V",
+              currentType: "DC",
+            });
+          } else if (comp.type === "FUNCTION_GENERATOR") {
+            handleUpdateInstrument({
+              instrumentId: comp.id,
+              isOpen: true,
+              windowPosition: { x: 150, y: 100 },
+              waveform: "sine",
+              frequency: String(comp.params?.["frequency"] || "1kHz"),
+              dutyCycle: 50,
+              amplitude: String(comp.params?.["voltage"] || "5V"),
+              offset: "0V",
+            });
+          } else if (comp.type === "OSCILLOSCOPE") {
+            handleUpdateInstrument({
+              instrumentId: comp.id,
+              isOpen: true,
+              windowPosition: { x: 180, y: 120 },
+              timebase: "1ms/div",
+              xPos: 0,
+              chA: { scale: "5V/div", yPos: 0, coupling: "DC" },
+              chB: { scale: "5V/div", yPos: 0, coupling: "DC" },
+              trigger: { mode: "auto", edge: "positive", level: 0, source: "chA" },
+            });
+          } else if (comp.type === "BODE_PLOTTER") {
+            handleUpdateInstrument({
+              instrumentId: comp.id,
+              isOpen: true,
+              windowPosition: { x: 210, y: 140 },
+              mode: "magnitude",
+              scaleH: "log",
+              scaleV: "log",
+              fstart: "10Hz",
+              fstop: "100kHz",
+              vMin: -60,
+              vMax: 20,
+            });
+          }
+        }
+      } else {
+        setEditingComponent(comp);
+      }
+    },
+    [circuit.instruments, handleUpdateInstrument]
+  );
 
   const handleSaveComponentProps = useCallback(
     async (id: string, updates: { label?: string; params: Record<string, string> }) => {
@@ -492,7 +585,80 @@ export const App: React.FC = () => {
         onConnectToWire={handleConnectToWire}
         onWiringStatusChange={(msg) => msg && setStatusText(msg)}
         onComponentDoubleClick={handleComponentDoubleClick}
-      />
+      >
+        {/* Floating Instrument Windows */}
+        {circuit.instruments
+          .filter((inst) => inst.isOpen)
+          .map((inst) => {
+            const comp = circuit.components.find((c) => c.id === inst.instrumentId);
+            if (!comp) return null;
+
+            let panelContent: React.ReactNode = null;
+            let title = `${comp.label || comp.id}`;
+
+            if (comp.type === "MULTIMETER") {
+              title = `Multimeter - ${comp.label || comp.id}`;
+              panelContent = (
+                <MultimeterPanel
+                  component={comp}
+                  state={inst as MultimeterState}
+                  simulation={simulation}
+                  onStateChange={handleUpdateInstrument}
+                />
+              );
+            } else if (comp.type === "FUNCTION_GENERATOR") {
+              title = `Function Generator - ${comp.label || comp.id}`;
+              panelContent = (
+                <FunctionGeneratorPanel
+                  component={comp}
+                  state={inst as FunctionGeneratorState}
+                  onStateChange={handleUpdateInstrument}
+                  onParamsChange={(params) => {
+                    if (window.spicebenchApi) {
+                      window.spicebenchApi.updateComponent({ id: comp.id, params });
+                    }
+                  }}
+                />
+              );
+            } else if (comp.type === "OSCILLOSCOPE") {
+              title = `Oscilloscope - ${comp.label || comp.id}`;
+              panelContent = (
+                <OscilloscopePanel
+                  component={comp}
+                  state={inst as OscilloscopeState}
+                  simulation={simulation}
+                  onStateChange={handleUpdateInstrument}
+                />
+              );
+            } else if (comp.type === "BODE_PLOTTER") {
+              title = `Bode Plotter - ${comp.label || comp.id}`;
+              panelContent = (
+                <BodePlotterPanel
+                  component={comp}
+                  state={inst as BodePlotterState}
+                  simulation={simulation}
+                  onStateChange={handleUpdateInstrument}
+                />
+              );
+            }
+
+            return (
+              <InstrumentWindow
+                key={inst.instrumentId}
+                title={title}
+                position={inst.windowPosition}
+                onMove={(newPos) =>
+                  handleUpdateInstrument({ ...inst, windowPosition: newPos })
+                }
+                onClose={() =>
+                  handleUpdateInstrument({ ...inst, isOpen: false })
+                }
+              >
+                {panelContent}
+              </InstrumentWindow>
+            );
+          })}
+      </Canvas>
 
       {/* 6. Win95 Status Bar */}
       <StatusBar
