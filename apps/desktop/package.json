@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pack": "electron-builder --dir -c electron-builder.json",
+    "dist": "electron-builder -c electron-builder.json",
+    "dist:mac": "electron-builder --mac -c electron-builder.json",
+    "dist:win": "electron-builder --win -c electron-builder.json"
   },
   "dependencies": {
     "@spicebench/core": "workspace:*",

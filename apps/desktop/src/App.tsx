@@ -24,6 +24,8 @@ import { MultimeterPanel } from "./components/instruments/MultimeterPanel";
 import { FunctionGeneratorPanel } from "./components/instruments/FunctionGeneratorPanel";
 import { OscilloscopePanel } from "./components/instruments/OscilloscopePanel";
 import { BodePlotterPanel } from "./components/instruments/BodePlotterPanel";
+import { McpServerDialog } from "./components/McpServerDialog";
+import type { McpServerStatus } from "./types/ipc";
 
 const emptyCircuit: CircuitProject = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -54,6 +56,8 @@ export const App: React.FC = () => {
   const [canUndo, setCanUndo] = useState<boolean>(false);
   const [canRedo, setCanRedo] = useState<boolean>(false);
   const [editingComponent, setEditingComponent] = useState<Component | null>(null);
+  const [mcpStatus, setMcpStatus] = useState<McpServerStatus | null>(null);
+  const [isMcpDialogOpen, setIsMcpDialogOpen] = useState<boolean>(false);
 
   const refreshUndoState = useCallback(async () => {
     if (typeof window !== "undefined" && window.spicebenchApi?.canUndo) {
@@ -86,6 +90,10 @@ export const App: React.FC = () => {
         refreshUndoState();
       });
 
+      window.spicebenchApi.getMcpStatus?.().then((st) => {
+        setMcpStatus(st);
+      });
+
       // Subscribe to live updates from Main (and MCP agent)
       const unsubCircuit = window.spicebenchApi.onCircuitUpdated((updated) => {
         setCircuit(updated);
@@ -103,9 +111,24 @@ export const App: React.FC = () => {
         }
       });
 
+      const unsubAction = window.spicebenchApi.onAgentAction?.((action) => {
+        setStatusText(`AI Agent: [${action.tool}] ${action.description}`);
+      });
+
+      const unsubMcp = window.spicebenchApi.onMcpStatusChanged?.((st) => {
+        setMcpStatus(st);
+      });
+
+      const unsubOpenMcp = window.spicebenchApi.onOpenMcpDialogRequested?.(() => {
+        setIsMcpDialogOpen(true);
+      });
+
       return () => {
         unsubCircuit();
         unsubSim();
+        unsubAction?.();
+        unsubMcp?.();
+        unsubOpenMcp?.();
       };
     }
   }, [refreshUndoState]);
@@ -138,6 +161,18 @@ export const App: React.FC = () => {
       setSimulation(null);
       refreshUndoState();
       setStatusText("New circuit created");
+    }
+  };
+
+  const handleToggleMcpServer = async (enable: boolean, port?: number) => {
+    if (window.spicebenchApi?.toggleMcpServer) {
+      try {
+        const next = await window.spicebenchApi.toggleMcpServer(enable, port);
+        setMcpStatus(next);
+        setStatusText(next.running ? `MCP Server active on port ${next.port}` : "MCP Server stopped");
+      } catch (err) {
+        setStatusText(`MCP Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   };
 
@@ -506,6 +541,9 @@ export const App: React.FC = () => {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         handleRotate();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        setIsMcpDialogOpen((prev) => !prev);
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         handleDelete();
@@ -550,6 +588,7 @@ export const App: React.FC = () => {
         onSelectAll={handleSelectAll}
         onUndo={handleUndo}
         onRedo={handleRedo}
+        onOpenMcpDialog={() => setIsMcpDialogOpen(true)}
       />
 
       {/* 3. Main ToolBar + Power Rocker Switch */}
@@ -666,6 +705,8 @@ export const App: React.FC = () => {
         statusText={statusText}
         stats={stats}
         powerOn={powerOn}
+        mcpStatus={mcpStatus}
+        onOpenMcpDialog={() => setIsMcpDialogOpen(true)}
       />
 
       {/* 7. Win95 Component Properties Modal */}
@@ -674,6 +715,14 @@ export const App: React.FC = () => {
         isOpen={!!editingComponent}
         onSave={handleSaveComponentProps}
         onClose={() => setEditingComponent(null)}
+      />
+
+      {/* 8. Win95 MCP Server Settings & Activity Dialog */}
+      <McpServerDialog
+        isOpen={isMcpDialogOpen}
+        status={mcpStatus}
+        onClose={() => setIsMcpDialogOpen(false)}
+        onToggleServer={handleToggleMcpServer}
       />
     </div>
   );

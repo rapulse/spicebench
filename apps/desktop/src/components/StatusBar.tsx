@@ -1,11 +1,14 @@
 import React from "react";
 import type { CircuitStats } from "@spicebench/mcp";
+import type { McpServerStatus } from "../types/ipc";
 
 interface StatusBarProps {
   cursorPos: { x: number; y: number };
   statusText: string;
   stats: CircuitStats;
   powerOn: boolean;
+  mcpStatus?: McpServerStatus | null;
+  onOpenMcpDialog?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -13,6 +16,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   statusText,
   stats,
   powerOn,
+  mcpStatus,
+  onOpenMcpDialog,
 }) => {
   return (
     <div className="ewb-status-bar">
@@ -34,8 +39,43 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         </span>
       </div>
 
-      <div className="ewb-status-panel" style={{ minWidth: "130px" }}>
-        MCP: 127.0.0.1:3100
+      <div
+        className="ewb-status-panel"
+        style={{
+          minWidth: "140px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          userSelect: "none",
+        }}
+        onClick={onOpenMcpDialog}
+        title="Click to view MCP Server Settings and Agent Activity Log"
+      >
+        <span
+          style={{
+            color: mcpStatus?.running ? "#00aa00" : "#888888",
+            fontWeight: "bold",
+          }}
+        >
+          ●
+        </span>
+        <span style={{ fontWeight: mcpStatus?.running ? "bold" : "normal" }}>
+          MCP: {mcpStatus?.running ? `:${mcpStatus.port}` : "OFF"}
+        </span>
+        {mcpStatus?.recentActions && mcpStatus.recentActions.length > 0 && (
+          <span
+            style={{
+              fontSize: "10px",
+              backgroundColor: "#e0e0e0",
+              border: "1px solid #999",
+              borderRadius: "3px",
+              padding: "0 4px",
+            }}
+          >
+            {mcpStatus.recentActions.length}
+          </span>
+        )}
       </div>
     </div>
   );

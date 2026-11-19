@@ -13,6 +13,7 @@ interface MenuBarProps {
   onSelectAll?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onOpenMcpDialog?: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -28,6 +29,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onSelectAll,
   onUndo,
   onRedo,
+  onOpenMcpDialog,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -144,6 +146,19 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </div>
             <div className="ewb-dropdown-item" onClick={closeMenu}>
               <span>AC Frequency Sweep (.ac)</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tools Menu */}
+      <div className={`ewb-menu-item ${activeMenu === "tools" ? "active" : ""}`} onClick={() => toggleMenu("tools")}>
+        Tools
+        {activeMenu === "tools" && (
+          <div className="ewb-menu-dropdown">
+            <div className="ewb-dropdown-item" onClick={() => { onOpenMcpDialog?.(); closeMenu(); }}>
+              <span>MCP Server Settings...</span>
+              <span>Ctrl+M</span>
             </div>
           </div>
         )}

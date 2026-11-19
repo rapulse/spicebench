@@ -15,7 +15,23 @@ import type {
   ConnectToWireOptions,
   SimulationRunOptions,
   InstrumentReading,
+  AgentActionLog,
 } from "@spicebench/mcp";
+
+export interface McpServerStatus {
+  running: boolean;
+  port: number;
+  host: string;
+  sseUrl: string;
+  activeSessions: number;
+  recentActions: AgentActionLog[];
+}
+
+export interface McpClientConfigMap {
+  claudeDesktop: string;
+  cursor: string;
+  antigravity: string;
+}
 
 export interface SpicebenchApi {
   getCircuit: () => Promise<CircuitProject>;
@@ -44,8 +60,14 @@ export interface SpicebenchApi {
   updateInstrument: (state: InstrumentState) => Promise<void>;
   readInstrument: (instrumentId: string) => Promise<InstrumentReading>;
   loadSampleCircuit: (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => Promise<CircuitProject>;
+  getMcpStatus: () => Promise<McpServerStatus>;
+  toggleMcpServer: (enable: boolean, port?: number) => Promise<McpServerStatus>;
+  getMcpClientConfigs: () => Promise<McpClientConfigMap>;
   onCircuitUpdated: (callback: (circuit: CircuitProject) => void) => () => void;
   onSimulationUpdated: (callback: (summary: SimulationSummary | null) => void) => () => void;
+  onAgentAction: (callback: (action: AgentActionLog) => void) => () => void;
+  onMcpStatusChanged: (callback: (status: McpServerStatus) => void) => () => void;
+  onOpenMcpDialogRequested?: (callback: () => void) => () => void;
 }
 
 declare global {

@@ -2,7 +2,14 @@ import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CircuitSession, type SimulationSummary } from "@spicebench/mcp";
+import {
+  CircuitSession,
+  createSpiceBenchMcpServer,
+  startHttpSseTransport,
+  type SimulationSummary,
+  type AgentActionLog,
+  type HttpSseServerInstance,
+} from "@spicebench/mcp";
 import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
 import { NetlistCompiler } from "@spicebench/sim";
 
@@ -10,6 +17,137 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
 const session = new CircuitSession();
+const mcpInstance = createSpiceBenchMcpServer({ session });
+let mcpTransport: HttpSseServerInstance | null = null;
+let mcpPort = parseInt(process.env["SPICEBENCH_MCP_PORT"] || "3100", 10);
+let mcpRunning = false;
+
+function broadcastCircuitUpdate() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("spicebench:circuit-updated", session.getCircuit());
+  }
+}
+
+function broadcastSimulationUpdate(summary: SimulationSummary | null) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("spicebench:simulation-updated", summary);
+  }
+}
+
+function broadcastAgentAction(action: AgentActionLog) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("spicebench:agent-action", action);
+  }
+}
+
+function broadcastMcpStatus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("spicebench:mcp-status-changed", getMcpStatus());
+  }
+}
+
+function getMcpStatus() {
+  return {
+    running: mcpRunning,
+    port: mcpPort,
+    host: "localhost",
+    sseUrl: `http://localhost:${mcpPort}/sse`,
+    activeSessions: 0,
+    recentActions: session.getActionHistory(),
+  };
+}
+
+async function startMcpServer(port = mcpPort) {
+  if (mcpRunning && mcpTransport) {
+    await stopMcpServer();
+  }
+  try {
+    mcpPort = port;
+    mcpTransport = await startHttpSseTransport(mcpInstance.server, { port: mcpPort, host: "localhost" });
+    mcpRunning = true;
+    console.log(`[SpiceBench MCP]: Server running at http://localhost:${mcpPort}/sse`);
+    broadcastMcpStatus();
+  } catch (err) {
+    mcpRunning = false;
+    mcpTransport = null;
+    console.error(`[SpiceBench MCP]: Failed to start on port ${port}:`, err);
+    broadcastMcpStatus();
+  }
+  return getMcpStatus();
+}
+
+async function stopMcpServer() {
+  if (mcpTransport) {
+    try {
+      await mcpTransport.close();
+    } catch {
+      // ignore
+    }
+    mcpTransport = null;
+  }
+  mcpRunning = false;
+  console.log(`[SpiceBench MCP]: Server stopped.`);
+  broadcastMcpStatus();
+  return getMcpStatus();
+}
+
+function getMcpClientConfigs() {
+  const sseUrl = `http://localhost:${mcpPort}/sse`;
+
+  const claudeDesktop = JSON.stringify(
+    {
+      mcpServers: {
+        spicebench: {
+          url: sseUrl,
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  const cursor = JSON.stringify(
+    {
+      mcpServers: {
+        spicebench: {
+          url: sseUrl,
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  const antigravity = JSON.stringify(
+    {
+      mcp: {
+        servers: {
+          spicebench: {
+            url: sseUrl,
+          },
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  return { claudeDesktop, cursor, antigravity };
+}
+
+// Hook session reactive events to broadcast to Renderer
+session.onCircuitChange(() => {
+  broadcastCircuitUpdate();
+});
+
+session.onSimulationChange((summary) => {
+  broadcastSimulationUpdate(summary);
+});
+
+session.onAgentAction((action) => {
+  broadcastAgentAction(action);
+  broadcastMcpStatus();
+});
 
 function loadSample(name: "voltage-divider" | "rc-step" | "rlc-filter") {
   session.reset();
@@ -76,18 +214,6 @@ function loadSample(name: "voltage-divider" | "rc-step" | "rlc-filter") {
   }
 
   return session.getCircuit();
-}
-
-function broadcastCircuitUpdate() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("spicebench:circuit-updated", session.getCircuit());
-  }
-}
-
-function broadcastSimulationUpdate(summary: SimulationSummary | null) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("spicebench:simulation-updated", summary);
-  }
 }
 
 function registerIpcHandlers() {
@@ -231,6 +357,16 @@ function registerIpcHandlers() {
     broadcastSimulationUpdate(null);
     return circuit;
   });
+
+  ipcMain.handle("spicebench:mcp-status", () => getMcpStatus());
+  ipcMain.handle("spicebench:mcp-toggle", async (_e, enable: boolean, port?: number) => {
+    if (enable) {
+      return await startMcpServer(port || mcpPort);
+    } else {
+      return await stopMcpServer();
+    }
+  });
+  ipcMain.handle("spicebench:mcp-get-config", () => getMcpClientConfigs());
 }
 
 function createWindow() {
@@ -269,6 +405,14 @@ function createWindow() {
             broadcastSimulationUpdate(summary);
             await new Promise((r) => setTimeout(r, 600));
           }
+          if (process.env["SPICEBENCH_OPEN_MCP_DIALOG"] === "1") {
+            session.logAgentAction("place_component", "Placed RESISTOR 'R3' at (15, 20)");
+            session.logAgentAction("connect_pins", "Connected R3:1 -> V1:pos");
+            session.logAgentAction("run_simulation", "Operating point simulation (.op) completed");
+            mainWindow.webContents.send("spicebench:open-mcp-dialog");
+            await new Promise((r) => setTimeout(r, 600));
+          }
+
           const image = await mainWindow.webContents.capturePage();
           await fs.writeFile(screenshotPath, image.toPNG());
           console.log(`[SpiceBench Screenshot]: saved to ${screenshotPath}`);
@@ -286,15 +430,22 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerIpcHandlers();
   createWindow();
+
+  // Auto-start embedded MCP server (defaults to 3100 or SPICEBENCH_MCP_PORT)
+  await startMcpServer(mcpPort);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+
+app.on("before-quit", async () => {
+  await stopMcpServer();
 });
 
 app.on("window-all-closed", () => {

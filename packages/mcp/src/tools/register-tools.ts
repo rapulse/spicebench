@@ -75,6 +75,11 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
           rotation: args.rotation,
         });
 
+        session.logAgentAction(
+          "place_component",
+          `Placed ${component.type} '${component.id}' at (${component.position.x}, ${component.position.y})`,
+        );
+
         return {
           content: [
             {
@@ -115,6 +120,8 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
           rotation: args.rotation,
         });
 
+        session.logAgentAction("update_component", `Updated component '${component.id}'`);
+
         return {
           content: [
             {
@@ -147,6 +154,10 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
     async ({ id }) => {
       try {
         const result = session.removeComponent(id);
+        session.logAgentAction(
+          "remove_component",
+          `Removed component '${id}' and ${result.removedWireCount} wire(s)`,
+        );
 
         return {
           content: [
@@ -186,6 +197,11 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
           id: args.id,
         });
 
+        session.logAgentAction(
+          "connect_pins",
+          `Connected ${args.fromComponentId}:${args.fromPinId} -> ${args.toComponentId}:${args.toPinId}`,
+        );
+
         return {
           content: [
             {
@@ -218,6 +234,10 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
     async () => {
       try {
         const report = session.validate();
+        session.logAgentAction(
+          "validate_circuit",
+          `Topology validation: ${report.isValid ? "Valid (0 errors)" : `${report.errors.length} error(s)`}`,
+        );
 
         return {
           content: [
@@ -261,6 +281,11 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
           timeoutMs: args.timeoutMs,
         });
 
+        session.logAgentAction(
+          "run_simulation",
+          `Simulation executed: ${summary.mode.toUpperCase()} (${summary.durationMs}ms)`,
+        );
+
         return {
           content: [
             {
@@ -290,6 +315,10 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
     async ({ instrumentId }) => {
       try {
         const reading = await session.readInstrument(instrumentId);
+        session.logAgentAction(
+          "read_instrument",
+          `Read '${instrumentId}': ${reading.formatted}`,
+        );
 
         return {
           content: [
@@ -350,6 +379,7 @@ export function registerTools(server: McpServer, session: CircuitSession): void 
     async () => {
       try {
         session.reset();
+        session.logAgentAction("reset_circuit", "Workspace cleared to empty canvas");
 
         return {
           content: [

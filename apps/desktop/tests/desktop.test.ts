@@ -8,6 +8,8 @@ import { ComponentDialog } from "../src/components/ComponentDialog";
 import { InstrumentWindow } from "../src/components/InstrumentWindow";
 import { MultimeterPanel } from "../src/components/instruments/MultimeterPanel";
 import { FunctionGeneratorPanel } from "../src/components/instruments/FunctionGeneratorPanel";
+import { StatusBar } from "../src/components/StatusBar";
+import { McpServerDialog } from "../src/components/McpServerDialog";
 import type { Component, ComponentType, CircuitProject, Wire } from "@spicebench/core";
 import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
 import { CircuitSession } from "@spicebench/mcp";
@@ -526,6 +528,109 @@ describe("Desktop Package", () => {
       expect(markup).toContain("Square");
       expect(markup).toContain("Frequency:");
       expect(markup).toContain("1kHz");
+    });
+  });
+
+  describe("Phase 7: Live MCP Server Synchronization & Status UI", () => {
+    it("fires onCircuitChange callback when components or wires change", () => {
+      const session = new CircuitSession();
+      let notifiedCircuit: CircuitProject | null = null;
+      const unsub = session.onCircuitChange((c) => {
+        notifiedCircuit = c;
+      });
+
+      const comp = session.placeComponent({
+        type: "RESISTOR",
+        id: "R1",
+        x: 10,
+        y: 10,
+      });
+
+      expect(comp.id).toBe("R1");
+      expect(notifiedCircuit).not.toBeNull();
+      expect(notifiedCircuit?.components.length).toBe(1);
+      expect(notifiedCircuit?.components[0]?.id).toBe("R1");
+
+      unsub();
+      session.placeComponent({
+        type: "CAPACITOR",
+        id: "C1",
+        x: 20,
+        y: 10,
+      });
+      // Should not notify after unsubscribe
+      expect(notifiedCircuit?.components.length).toBe(1);
+    });
+
+    it("records and notifies agent actions via logAgentAction", () => {
+      const session = new CircuitSession();
+      const actions: ReturnType<typeof session.getActionHistory> = [];
+      session.onAgentAction((act) => {
+        actions.push(act);
+      });
+
+      session.logAgentAction("place_component", "Placed RESISTOR R1");
+      session.logAgentAction("run_simulation", "Simulation OP finished");
+
+      expect(actions.length).toBe(2);
+      expect(actions[0]?.tool).toBe("place_component");
+      expect(actions[1]?.tool).toBe("run_simulation");
+
+      const history = session.getActionHistory();
+      expect(history.length).toBe(2);
+      expect(history[0]?.tool).toBe("run_simulation"); // Most recent first
+    });
+
+    it("renders interactive StatusBar with MCP indicator and port", () => {
+      const markup = renderToStaticMarkup(
+        React.createElement(StatusBar, {
+          cursorPos: { x: 15, y: 25 },
+          statusText: "Ready",
+          stats: { componentCount: 4, wireCount: 3, junctionCount: 1, instrumentCount: 1 },
+          powerOn: true,
+          mcpStatus: {
+            running: true,
+            port: 3100,
+            host: "localhost",
+            sseUrl: "http://localhost:3100/sse",
+            activeSessions: 1,
+            recentActions: [
+              { id: "1", tool: "place_component", description: "Placed R1", timestamp: Date.now() },
+            ],
+          },
+        })
+      );
+
+      expect(markup).toContain("MCP: :3100");
+      expect(markup).toContain("● RUNNING");
+      expect(markup).toContain("Parts: 4");
+    });
+
+    it("renders McpServerDialog with Win95 tabs, status, and client configs", () => {
+      const markup = renderToStaticMarkup(
+        React.createElement(McpServerDialog, {
+          isOpen: true,
+          status: {
+            running: true,
+            port: 3100,
+            host: "localhost",
+            sseUrl: "http://localhost:3100/sse",
+            activeSessions: 1,
+            recentActions: [
+              { id: "act1", tool: "place_component", description: "Placed R1", timestamp: Date.now() },
+            ],
+          },
+          onClose: () => {},
+          onToggleServer: async () => {},
+        })
+      );
+
+      expect(markup).toContain("Model Context Protocol (MCP) Server Settings");
+      expect(markup).toContain("Server Status");
+      expect(markup).toContain("AI Activity Log (1)");
+      expect(markup).toContain("Client Configs");
+      expect(markup).toContain("Running (Streamable HTTP / SSE)");
+      expect(markup).toContain("3100");
     });
   });
 });

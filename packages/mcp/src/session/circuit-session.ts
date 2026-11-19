@@ -124,6 +124,13 @@ export interface InstrumentReading {
   formatted: string;
 }
 
+export interface AgentActionLog {
+  id: string;
+  tool: string;
+  description: string;
+  timestamp: number;
+}
+
 export class CircuitSession {
   private graph: CircuitGraph;
   private runner: SpiceRunner;
@@ -132,15 +139,82 @@ export class CircuitSession {
   private lastResult?: SimulationResult;
   private isDirty = true;
 
+  private circuitChangeListeners: Set<(circuit: CircuitProject) => void> = new Set();
+  private simulationChangeListeners: Set<(summary: SimulationSummary | null) => void> = new Set();
+  private agentActionListeners: Set<(action: AgentActionLog) => void> = new Set();
+  private actionHistory: AgentActionLog[] = [];
+
   constructor(initialProject?: CircuitProject) {
     this.graph = new CircuitGraph(initialProject);
     this.runner = new SpiceRunner({ useWorkerThread: false });
+  }
+
+  public onCircuitChange(listener: (circuit: CircuitProject) => void): () => void {
+    this.circuitChangeListeners.add(listener);
+    return () => this.circuitChangeListeners.delete(listener);
+  }
+
+  public onSimulationChange(listener: (summary: SimulationSummary | null) => void): () => void {
+    this.simulationChangeListeners.add(listener);
+    return () => this.simulationChangeListeners.delete(listener);
+  }
+
+  public onAgentAction(listener: (action: AgentActionLog) => void): () => void {
+    this.agentActionListeners.add(listener);
+    return () => this.agentActionListeners.delete(listener);
+  }
+
+  public logAgentAction(tool: string, description: string): AgentActionLog {
+    const action: AgentActionLog = {
+      id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      tool,
+      description,
+      timestamp: Date.now(),
+    };
+    this.actionHistory.unshift(action);
+    if (this.actionHistory.length > 100) {
+      this.actionHistory.pop();
+    }
+    for (const l of this.agentActionListeners) {
+      try {
+        l(action);
+      } catch {
+        // ignore
+      }
+    }
+    return action;
+  }
+
+  public getActionHistory(): AgentActionLog[] {
+    return [...this.actionHistory];
+  }
+
+  private notifyCircuitChange(): void {
+    const circuit = this.getCircuit();
+    for (const l of this.circuitChangeListeners) {
+      try {
+        l(circuit);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  private notifySimulationChange(summary: SimulationSummary | null): void {
+    for (const l of this.simulationChangeListeners) {
+      try {
+        l(summary);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   public undo(): boolean {
     const success = this.commandManager.undo(this.graph);
     if (success) {
       this.isDirty = true;
+      this.notifyCircuitChange();
     }
     return success;
   }
@@ -149,6 +223,7 @@ export class CircuitSession {
     const success = this.commandManager.redo(this.graph);
     if (success) {
       this.isDirty = true;
+      this.notifyCircuitChange();
     }
     return success;
   }
@@ -254,6 +329,7 @@ export class CircuitSession {
     }
 
     this.isDirty = true;
+    this.notifyCircuitChange();
     return comp;
   }
 
@@ -301,6 +377,7 @@ export class CircuitSession {
     }
 
     this.isDirty = true;
+    this.notifyCircuitChange();
     return this.graph.getComponent(id)!;
   }
 
@@ -349,6 +426,7 @@ export class CircuitSession {
     this.commandManager.execute(new RemoveComponentCommand(id), this.graph);
     this.graph.removeInstrument(id);
     this.isDirty = true;
+    this.notifyCircuitChange();
     return {
       removedComponentId: id,
       removedWireCount: removedWires.length,
@@ -358,6 +436,7 @@ export class CircuitSession {
   public updateInstrument(state: InstrumentState): void {
     this.graph.setInstrument(state);
     this.isDirty = true;
+    this.notifyCircuitChange();
   }
 
   public connectPins(options: ConnectPinsOptions): Wire {
@@ -409,11 +488,13 @@ export class CircuitSession {
       this.graph.addWire(customWire);
       this.commandManager.pushExecuted(new ConnectWireCommand(customWire));
       this.isDirty = true;
+      this.notifyCircuitChange();
       return customWire;
     }
 
     this.commandManager.pushExecuted(new ConnectWireCommand(wire));
     this.isDirty = true;
+    this.notifyCircuitChange();
     return wire;
   }
 
@@ -441,6 +522,7 @@ export class CircuitSession {
     );
     this.commandManager.execute(cmd, this.graph);
     this.isDirty = true;
+    this.notifyCircuitChange();
     return cmd.result!;
   }
 
@@ -469,7 +551,9 @@ export class CircuitSession {
     this.lastResult = result;
     this.isDirty = false;
 
-    return this.buildSimulationSummary(result, compiled);
+    const summary = this.buildSimulationSummary(result, compiled);
+    this.notifySimulationChange(summary);
+    return summary;
   }
 
   public async readInstrument(instrumentId: string): Promise<InstrumentReading> {
@@ -532,6 +616,8 @@ export class CircuitSession {
     this.lastCompiled = undefined;
     this.lastResult = undefined;
     this.isDirty = true;
+    this.notifyCircuitChange();
+    this.notifySimulationChange(null);
   }
 
   public loadCircuit(project: CircuitProject): void {
@@ -540,6 +626,8 @@ export class CircuitSession {
     this.lastCompiled = undefined;
     this.lastResult = undefined;
     this.isDirty = true;
+    this.notifyCircuitChange();
+    this.notifySimulationChange(null);
   }
 
   private generateNextComponentId(type: ComponentType): string {
