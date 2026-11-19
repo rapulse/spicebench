@@ -130,12 +130,29 @@ TypeScript.
 * **Проверка Windows-сборки на Mac M1:** через виртуальную машину Windows 11 ARM (UTM / 
 Parallels) либо на целевом ПК с Windows.
 
-### Базовые команды (после инициализации Фазы 0)
+### Базовые команды разработки и проверки
 
 ```bash
-pnpm install             # установка зависимостей монорепозитория
-pnpm typecheck           # проверка типов во всех пакетах
-pnpm lint                # проверка кодстайла
-pnpm test                # запуск юнит-тестов и эталонных SPICE-тестов (Vitest)
-pnpm --filter desktop dev # запуск десктопного приложения в режиме разработки
+# Установка зависимостей монорепозитория
+pnpm install
+
+# Проверка статической типизации во всех пакетах
+pnpm typecheck
+
+# Проверка кодстайла линтером ESLint
+pnpm lint
+
+# Запуск юнит-тестов и эталонных Golden Fixtures (Vitest)
+pnpm test
+
+# Сборка всех пакетов монорепозитория
+pnpm build
+
+# Запуск десктопного приложения в режиме разработки
+pnpm --filter @spicebench/desktop dev
+
+# Сборка только пакета десктопа
+pnpm --filter @spicebench/desktop build
 ```
+
+Подробные спецификации компонентов окна, IPC-моста и особенностей сборки см. в [ui-win95-spec.md](file:///Users/master/Projects/spicebench/docs/wiki/ui-win95-spec.md) и [apps/desktop/README.md](file:///Users/master/Projects/spicebench/apps/desktop/README.md).
