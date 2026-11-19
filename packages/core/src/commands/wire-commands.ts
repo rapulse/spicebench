@@ -1,6 +1,6 @@
 import { Command } from "./command";
 import { CircuitGraph } from "../graph/circuit-graph";
-import { Wire, Junction } from "../schema/wire";
+import { Wire, Junction, WireEndpoint } from "../schema/wire";
 import { Position } from "../schema/geometry";
 
 export class ConnectWireCommand implements Command {
@@ -101,6 +101,73 @@ export class SplitWireCommand implements Command {
     }
     // Restore original wire
     graph.removeWire(this.wireId);
+    graph.addWire(this.originalWire);
+  }
+}
+
+export class ConnectToWireCommand implements Command {
+  public readonly id = "ConnectToWire";
+  public readonly description: string;
+
+  private originalWire?: Wire;
+  public result?: {
+    junction: Junction;
+    branchWire: Wire;
+    wire1: Wire;
+    wire2: Wire;
+  };
+
+  constructor(
+    private readonly from: WireEndpoint,
+    private readonly targetWireId: string,
+    private readonly hitPoint: Position,
+    private readonly color?: string,
+  ) {
+    this.description = `Connect endpoint to wire ${targetWireId}`;
+  }
+
+  public execute(graph: CircuitGraph): void {
+    const wire = graph.getWire(this.targetWireId);
+    if (!wire) {
+      throw new Error(`Target wire "${this.targetWireId}" not found`);
+    }
+
+    if (!this.originalWire) {
+      this.originalWire = {
+        ...wire,
+        points: wire.points.map((p) => ({ ...p })),
+      };
+      this.result = graph.connectToWireAt(
+        this.from,
+        this.targetWireId,
+        this.hitPoint,
+        this.color,
+      );
+    } else if (this.result) {
+      // Re-execution (redo)
+      graph.removeWire(this.targetWireId);
+      graph.addJunction(this.result.junction);
+      graph.addWire(this.result.wire1);
+      graph.addWire(this.result.wire2);
+      graph.addWire(this.result.branchWire);
+    }
+  }
+
+  public undo(graph: CircuitGraph): void {
+    if (!this.originalWire || !this.result) return;
+
+    if (graph.getWire(this.result.branchWire.id)) {
+      graph.removeWire(this.result.branchWire.id);
+    }
+    if (graph.getWire(this.result.wire2.id)) {
+      graph.removeWire(this.result.wire2.id);
+    }
+    if (graph.getWire(this.result.wire1.id)) {
+      graph.removeWire(this.result.wire1.id);
+    }
+    if (graph.getJunction(this.result.junction.id)) {
+      graph.removeJunction(this.result.junction.id);
+    }
     graph.addWire(this.originalWire);
   }
 }

@@ -255,3 +255,90 @@ html, body, #root {
 .ewb-status-panel.grow {
   flex: 1;
 }
+
+/* Modal Dialog (Win95 Properties) */
+.ewb-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.ewb-dialog-window {
+  width: 360px;
+  max-width: 90vw;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.ewb-dialog-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 2px solid #808080;
+  margin-bottom: 10px;
+}
+
+.ewb-dialog-tab {
+  padding: 3px 12px;
+  cursor: pointer;
+  border: 2px outset #ffffff;
+  border-bottom: none;
+  background: #c0c0c0;
+  margin-bottom: -2px;
+  font-size: 11px;
+}
+
+.ewb-dialog-tab.active {
+  background: #c0c0c0;
+  font-weight: bold;
+  border-bottom: 2px solid #c0c0c0;
+}
+
+.ewb-dialog-content {
+  border: 2px groove #ffffff;
+  padding: 12px;
+  background: #c0c0c0;
+  min-height: 100px;
+}
+
+.ewb-dialog-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.ewb-dialog-label {
+  width: 90px;
+  font-size: 11px;
+  text-align: right;
+}
+
+.ewb-dialog-input {
+  flex: 1;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.ewb-dialog-select {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.ewb-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ewb-dialog-btn {
+  min-width: 75px;
+  height: 23px;
+  font-size: 11px;
+}

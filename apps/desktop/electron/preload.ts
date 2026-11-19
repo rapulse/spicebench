@@ -15,6 +15,10 @@ const api: SpicebenchApi = {
   runSimulation: (opts) => ipcRenderer.invoke("spicebench:run-simulation", opts),
   setPower: (powerOn) => ipcRenderer.invoke("spicebench:set-power", powerOn),
   resetCircuit: () => ipcRenderer.invoke("spicebench:reset-circuit"),
+  undo: () => ipcRenderer.invoke("spicebench:undo"),
+  redo: () => ipcRenderer.invoke("spicebench:redo"),
+  canUndo: () => ipcRenderer.invoke("spicebench:can-undo"),
+  canRedo: () => ipcRenderer.invoke("spicebench:can-redo"),
   loadSampleCircuit: (name) => ipcRenderer.invoke("spicebench:load-sample", name),
   onCircuitUpdated: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, circuit: CircuitProject) => callback(circuit);

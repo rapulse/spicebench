@@ -8,6 +8,10 @@ interface ToolBarProps {
   onSimulate: () => void;
   onRotate?: () => void;
   onDelete?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export const ToolBar: React.FC<ToolBarProps> = ({
@@ -18,6 +22,10 @@ export const ToolBar: React.FC<ToolBarProps> = ({
   onSimulate,
   onRotate,
   onDelete,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }) => {
   return (
     <div className="ewb-toolbar">
@@ -31,6 +39,25 @@ export const ToolBar: React.FC<ToolBarProps> = ({
         </button>
         <button className="ewb-tool-btn" title="Save">
           💾
+        </button>
+
+        <div className="ewb-tool-divider" />
+
+        <button
+          className="ewb-tool-btn"
+          title="Undo (Ctrl+Z)"
+          onClick={onUndo}
+          disabled={canUndo === false}
+        >
+          ↶
+        </button>
+        <button
+          className="ewb-tool-btn"
+          title="Redo (Ctrl+Y)"
+          onClick={onRedo}
+          disabled={canRedo === false}
+        >
+          ↷
         </button>
 
         <div className="ewb-tool-divider" />

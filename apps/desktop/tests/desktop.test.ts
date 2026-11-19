@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DESKTOP_VERSION } from "../src/index";
 import { SchematicSymbol } from "../src/components/SchematicSymbol";
 import { Canvas, findNearestPointOnWire } from "../src/components/Canvas";
+import { ComponentDialog } from "../src/components/ComponentDialog";
 import type { Component, ComponentType, CircuitProject, Wire } from "@spicebench/core";
 import type { SpicebenchApi } from "../src/types/ipc";
 
@@ -258,6 +259,10 @@ describe("Desktop Package", () => {
         }),
         setPower: async () => null,
         resetCircuit: async () => {},
+        undo: async () => true,
+        redo: async () => true,
+        canUndo: async () => true,
+        canRedo: async () => false,
         loadSampleCircuit: async () => ({
           schemaVersion: 1,
           meta: { name: "Sample", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
@@ -274,7 +279,63 @@ describe("Desktop Package", () => {
       expect(typeof mockApi.placeComponent).toBe("function");
       expect(typeof mockApi.runSimulation).toBe("function");
       expect(typeof mockApi.setPower).toBe("function");
+      expect(typeof mockApi.undo).toBe("function");
+      expect(typeof mockApi.redo).toBe("function");
+      expect(typeof mockApi.canUndo).toBe("function");
+      expect(typeof mockApi.canRedo).toBe("function");
       expect(typeof mockApi.onCircuitUpdated).toBe("function");
+    });
+  });
+
+  describe("Component Properties Dialog (Phase 5.3)", () => {
+    it("renders Win95 properties dialog markup for resistor", () => {
+      const resistor: Component = {
+        id: "R1",
+        type: "RESISTOR",
+        label: "R1",
+        position: { x: 10, y: 10 },
+        rotation: 0,
+        params: { resistance: "10k" },
+      };
+
+      const markup = renderToStaticMarkup(
+        React.createElement(ComponentDialog, {
+          component: resistor,
+          isOpen: true,
+          onSave: () => {},
+          onClose: () => {},
+        })
+      );
+
+      expect(markup).toContain("R1 Properties");
+      expect(markup).toContain("Value");
+      expect(markup).toContain("Label");
+      expect(markup).toContain("Specs");
+      expect(markup).toContain("Resistance:");
+      expect(markup).toContain("OK");
+      expect(markup).toContain("Cancel");
+    });
+
+    it("renders nothing when isOpen is false", () => {
+      const resistor: Component = {
+        id: "R1",
+        type: "RESISTOR",
+        label: "R1",
+        position: { x: 10, y: 10 },
+        rotation: 0,
+        params: { resistance: "10k" },
+      };
+
+      const markup = renderToStaticMarkup(
+        React.createElement(ComponentDialog, {
+          component: resistor,
+          isOpen: false,
+          onSave: () => {},
+          onClose: () => {},
+        })
+      );
+
+      expect(markup).toBe("");
     });
   });
 });

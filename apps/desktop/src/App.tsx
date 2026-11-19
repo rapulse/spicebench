@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import type { CircuitProject, ComponentType, Rotation } from "@spicebench/core";
+import type { CircuitProject, Component, ComponentType, Rotation } from "@spicebench/core";
 import { CURRENT_SCHEMA_VERSION } from "@spicebench/core";
 import type { CircuitStats, SimulationSummary } from "@spicebench/mcp";
 import { TitleBar } from "./components/TitleBar";
@@ -8,6 +8,7 @@ import { ToolBar } from "./components/ToolBar";
 import { PartsBin } from "./components/PartsBin";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
+import { ComponentDialog } from "./components/ComponentDialog";
 
 const emptyCircuit: CircuitProject = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -35,6 +36,22 @@ export const App: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [statusText, setStatusText] = useState<string>("Ready");
+  const [canUndo, setCanUndo] = useState<boolean>(false);
+  const [canRedo, setCanRedo] = useState<boolean>(false);
+  const [editingComponent, setEditingComponent] = useState<Component | null>(null);
+
+  const refreshUndoState = useCallback(async () => {
+    if (typeof window !== "undefined" && window.spicebenchApi?.canUndo) {
+      try {
+        const u = await window.spicebenchApi.canUndo();
+        const r = await window.spicebenchApi.canRedo();
+        setCanUndo(u);
+        setCanRedo(r);
+      } catch {
+        // Ignored
+      }
+    }
+  }, []);
 
   const updateStats = (c: CircuitProject) => {
     setStats({
@@ -51,12 +68,14 @@ export const App: React.FC = () => {
       window.spicebenchApi.getCircuit().then((c) => {
         setCircuit(c);
         updateStats(c);
+        refreshUndoState();
       });
 
       // Subscribe to live updates from Main (and MCP agent)
       const unsubCircuit = window.spicebenchApi.onCircuitUpdated((updated) => {
         setCircuit(updated);
         updateStats(updated);
+        refreshUndoState();
         setStatusText("Circuit updated");
       });
 
@@ -74,7 +93,7 @@ export const App: React.FC = () => {
         unsubSim();
       };
     }
-  }, []);
+  }, [refreshUndoState]);
 
   const handleTogglePower = async () => {
     const nextPower = !powerOn;
@@ -268,7 +287,58 @@ export const App: React.FC = () => {
     setStatusText(`Selected all ${allIds.length} component(s)`);
   }, [circuit.components]);
 
-  // Global Keyboard Shortcuts (Ctrl+R / Cmd+R to rotate, Del / Backspace to delete, Ctrl+A to select all, Esc to deselect)
+  const handleUndo = useCallback(async () => {
+    if (window.spicebenchApi) {
+      try {
+        const ok = await window.spicebenchApi.undo();
+        if (ok) {
+          setStatusText("Undo");
+          refreshUndoState();
+        }
+      } catch (err) {
+        setStatusText(`Undo failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, [refreshUndoState]);
+
+  const handleRedo = useCallback(async () => {
+    if (window.spicebenchApi) {
+      try {
+        const ok = await window.spicebenchApi.redo();
+        if (ok) {
+          setStatusText("Redo");
+          refreshUndoState();
+        }
+      } catch (err) {
+        setStatusText(`Redo failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, [refreshUndoState]);
+
+  const handleComponentDoubleClick = useCallback((comp: Component) => {
+    setEditingComponent(comp);
+  }, []);
+
+  const handleSaveComponentProps = useCallback(
+    async (id: string, updates: { label?: string; params: Record<string, string> }) => {
+      if (window.spicebenchApi) {
+        try {
+          await window.spicebenchApi.updateComponent({
+            id,
+            label: updates.label,
+            params: updates.params,
+          });
+          setStatusText(`Updated properties of '${id}'`);
+          refreshUndoState();
+        } catch (err) {
+          setStatusText(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    },
+    [refreshUndoState]
+  );
+
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isInput =
@@ -276,7 +346,16 @@ export const App: React.FC = () => {
         document.activeElement instanceof HTMLTextAreaElement;
       if (isInput) return;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))
+      ) {
+        e.preventDefault();
+        handleRedo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         handleRotate();
       } else if (e.key === "Delete" || e.key === "Backspace") {
@@ -293,7 +372,7 @@ export const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleRotate, handleDelete, handleSelectAll]);
+  }, [handleUndo, handleRedo, handleRotate, handleDelete, handleSelectAll]);
 
   return (
     <div className="ewb-window window">
@@ -309,6 +388,8 @@ export const App: React.FC = () => {
         onRotate={handleRotate}
         onDelete={handleDelete}
         onSelectAll={handleSelectAll}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
       />
 
       {/* 3. Main ToolBar + Power Rocker Switch */}
@@ -320,6 +401,10 @@ export const App: React.FC = () => {
         onSimulate={handleSimulate}
         onRotate={handleRotate}
         onDelete={handleDelete}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
 
       {/* 4. Parts Bin Shelf */}
@@ -337,6 +422,7 @@ export const App: React.FC = () => {
         onConnectPins={handleConnectPins}
         onConnectToWire={handleConnectToWire}
         onWiringStatusChange={(msg) => msg && setStatusText(msg)}
+        onComponentDoubleClick={handleComponentDoubleClick}
       />
 
       {/* 6. Win95 Status Bar */}
@@ -345,6 +431,14 @@ export const App: React.FC = () => {
         statusText={statusText}
         stats={stats}
         powerOn={powerOn}
+      />
+
+      {/* 7. Win95 Component Properties Modal */}
+      <ComponentDialog
+        component={editingComponent}
+        isOpen={!!editingComponent}
+        onSave={handleSaveComponentProps}
+        onClose={() => setEditingComponent(null)}
       />
     </div>
   );

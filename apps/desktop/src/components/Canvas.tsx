@@ -33,6 +33,7 @@ interface CanvasProps {
     hitPoint: { x: number; y: number };
   }) => void;
   onWiringStatusChange?: (status: string | null) => void;
+  onComponentDoubleClick?: (component: Component) => void;
 }
 
 const GRID_SPACING = 20; // 20 pixels per logical grid unit
@@ -109,6 +110,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onConnectPins,
   onConnectToWire,
   onWiringStatusChange,
+  onComponentDoubleClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -593,6 +595,10 @@ export const Canvas: React.FC<CanvasProps> = ({
                 key={comp.id}
                 transform={`translate(${posX}, ${posY})`}
                 onMouseDown={(e) => handleComponentMouseDown(e, comp)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onComponentDoubleClick?.(comp);
+                }}
                 cursor={wiring ? "crosshair" : isBeingDragged ? "grabbing" : "grab"}
               >
                 <SchematicSymbol component={comp} isSelected={isCompSelected} />

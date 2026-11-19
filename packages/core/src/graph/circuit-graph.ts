@@ -293,6 +293,14 @@ export class CircuitGraph {
     this.junctions.set(junction.id, { ...junction });
   }
 
+  public removeJunction(id: string): Junction | undefined {
+    const junction = this.junctions.get(id);
+    if (junction) {
+      this.junctions.delete(id);
+    }
+    return junction;
+  }
+
   /**
    * Splits an existing wire at a specified point on its polyline,
    * inserting a Junction and creating two contiguous sub-wires.

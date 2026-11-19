@@ -129,15 +129,23 @@ export class UpdateComponentParamsCommand implements Command {
     private readonly componentId: string,
     private readonly oldParams: Record<string, string>,
     private readonly newParams: Record<string, string>,
+    private readonly oldLabel?: string,
+    private readonly newLabel?: string,
   ) {
     this.description = `Update parameters of ${componentId}`;
   }
 
   public execute(graph: CircuitGraph): void {
-    graph.updateComponent(this.componentId, { params: this.newParams });
+    graph.updateComponent(this.componentId, {
+      params: this.newParams,
+      ...(this.newLabel !== undefined ? { label: this.newLabel } : {}),
+    });
   }
 
   public undo(graph: CircuitGraph): void {
-    graph.updateComponent(this.componentId, { params: this.oldParams });
+    graph.updateComponent(this.componentId, {
+      params: this.oldParams,
+      ...(this.oldLabel !== undefined ? { label: this.oldLabel } : {}),
+    });
   }
 }

@@ -8,6 +8,8 @@ interface MenuBarProps {
   onRotate?: () => void;
   onDelete?: () => void;
   onSelectAll?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -18,6 +20,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onRotate,
   onDelete,
   onSelectAll,
+  onUndo,
+  onRedo,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -59,11 +63,11 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         Edit
         {activeMenu === "edit" && (
           <div className="ewb-menu-dropdown">
-            <div className="ewb-dropdown-item" onClick={closeMenu}>
+            <div className="ewb-dropdown-item" onClick={() => { onUndo?.(); closeMenu(); }}>
               <span>Undo</span>
               <span>Ctrl+Z</span>
             </div>
-            <div className="ewb-dropdown-item" onClick={closeMenu}>
+            <div className="ewb-dropdown-item" onClick={() => { onRedo?.(); closeMenu(); }}>
               <span>Redo</span>
               <span>Ctrl+Y</span>
             </div>

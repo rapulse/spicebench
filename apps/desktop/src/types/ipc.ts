@@ -32,6 +32,10 @@ export interface SpicebenchApi {
   runSimulation: (options?: SimulationRunOptions) => Promise<SimulationSummary>;
   setPower: (powerOn: boolean) => Promise<SimulationSummary | null>;
   resetCircuit: () => Promise<void>;
+  undo: () => Promise<boolean>;
+  redo: () => Promise<boolean>;
+  canUndo: () => Promise<boolean>;
+  canRedo: () => Promise<boolean>;
   loadSampleCircuit: (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => Promise<CircuitProject>;
   onCircuitUpdated: (callback: (circuit: CircuitProject) => void) => () => void;
   onSimulationUpdated: (callback: (summary: SimulationSummary | null) => void) => () => void;

@@ -17,6 +17,15 @@ export class CommandManager {
     }
   }
 
+  public pushExecuted(command: Command): void {
+    this.undoStack.push(command);
+    this.redoStack = [];
+
+    if (this.undoStack.length > this.maxHistorySize) {
+      this.undoStack.shift();
+    }
+  }
+
   public undo(graph: CircuitGraph): boolean {
     if (!this.canUndo) return false;
     const command = this.undoStack.pop()!;

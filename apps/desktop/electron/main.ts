@@ -118,6 +118,21 @@ function registerIpcHandlers() {
     broadcastSimulationUpdate(null);
   });
 
+  ipcMain.handle("spicebench:undo", () => {
+    const res = session.undo();
+    broadcastCircuitUpdate();
+    return res;
+  });
+
+  ipcMain.handle("spicebench:redo", () => {
+    const res = session.redo();
+    broadcastCircuitUpdate();
+    return res;
+  });
+
+  ipcMain.handle("spicebench:can-undo", () => session.canUndo);
+  ipcMain.handle("spicebench:can-redo", () => session.canRedo);
+
   ipcMain.handle("spicebench:load-sample", (_e, name) => {
     const circuit = loadSample(name);
     broadcastCircuitUpdate();

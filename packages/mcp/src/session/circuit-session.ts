@@ -15,6 +15,16 @@ import {
   TopologyValidator,
   ValidationResult,
   ValidationDiagnostic,
+  Command,
+  CommandManager,
+  AddComponentCommand,
+  RemoveComponentCommand,
+  MoveComponentCommand,
+  RotateComponentCommand,
+  UpdateComponentParamsCommand,
+  ConnectWireCommand,
+  ConnectToWireCommand,
+  BatchCommand,
 } from "@spicebench/core";
 import {
   NetlistCompiler,
@@ -115,6 +125,7 @@ export interface InstrumentReading {
 export class CircuitSession {
   private graph: CircuitGraph;
   private runner: SpiceRunner;
+  private commandManager: CommandManager = new CommandManager(100);
   private lastCompiled?: CompiledNetlist;
   private lastResult?: SimulationResult;
   private isDirty = true;
@@ -122,6 +133,30 @@ export class CircuitSession {
   constructor(initialProject?: CircuitProject) {
     this.graph = new CircuitGraph(initialProject);
     this.runner = new SpiceRunner({ useWorkerThread: false });
+  }
+
+  public undo(): boolean {
+    const success = this.commandManager.undo(this.graph);
+    if (success) {
+      this.isDirty = true;
+    }
+    return success;
+  }
+
+  public redo(): boolean {
+    const success = this.commandManager.redo(this.graph);
+    if (success) {
+      this.isDirty = true;
+    }
+    return success;
+  }
+
+  public get canUndo(): boolean {
+    return this.commandManager.canUndo;
+  }
+
+  public get canRedo(): boolean {
+    return this.commandManager.canRedo;
   }
 
   public getGraph(): CircuitGraph {
@@ -168,7 +203,7 @@ export class CircuitSession {
       comp.params = { ...comp.params, ...params };
     }
 
-    this.graph.addComponent(comp);
+    this.commandManager.execute(new AddComponentCommand(comp), this.graph);
     this.isDirty = true;
     return comp;
   }
@@ -180,30 +215,44 @@ export class CircuitSession {
       throw new Error(`Component with ID '${id}' not found in circuit.`);
     }
 
-    const updates: Partial<Component> = {};
+    const oldPos = { ...existing.position };
+    const oldRot = existing.rotation;
+    const oldParams = { ...existing.params };
+    const oldLabel = existing.label;
 
-    if (label !== undefined) updates.label = label;
-    if (params) {
-      updates.params = { ...existing.params, ...params };
+    const newX = x !== undefined ? x : existing.position.x;
+    const newY = y !== undefined ? y : existing.position.y;
+    const newRot = rotation !== undefined ? rotation : existing.rotation;
+    const newParams = params ? { ...existing.params, ...params } : existing.params;
+    const newLabel = label !== undefined ? label : existing.label;
+
+    const paramsChanged = params && JSON.stringify(oldParams) !== JSON.stringify(newParams);
+    const labelChanged = label !== undefined && label !== oldLabel;
+
+    const cmds: Command[] = [];
+    if (newX !== oldPos.x || newY !== oldPos.y) {
+      cmds.push(new MoveComponentCommand(id, oldPos, { x: newX, y: newY }));
     }
-    if (rotation !== undefined) updates.rotation = rotation;
-    if (x !== undefined && y !== undefined) {
-      updates.position = { x, y };
-    } else if (x !== undefined) {
-      updates.position = { x, y: existing.position.y };
-    } else if (y !== undefined) {
-      updates.position = { x: existing.position.x, y };
+    if (newRot !== oldRot) {
+      cmds.push(new RotateComponentCommand(id, oldRot, newRot));
+    }
+    if (paramsChanged || labelChanged) {
+      cmds.push(new UpdateComponentParamsCommand(id, oldParams, newParams, oldLabel, newLabel));
     }
 
-    this.isDirty = true;
-    const updated = this.graph.updateComponent(id, updates);
+    if (cmds.length === 1) {
+      this.commandManager.execute(cmds[0]!, this.graph);
+    } else if (cmds.length > 1) {
+      this.commandManager.execute(new BatchCommand(cmds, `Update ${id}`), this.graph);
+    }
 
     // If position or rotation changed, re-route connected wires orthogonally
-    if (updates.position !== undefined || updates.rotation !== undefined) {
+    if (newX !== oldPos.x || newY !== oldPos.y || newRot !== oldRot) {
       this.rerouteWiresForComponent(id);
     }
 
-    return updated;
+    this.isDirty = true;
+    return this.graph.getComponent(id)!;
   }
 
   private rerouteWiresForComponent(componentId: string): void {
@@ -236,11 +285,23 @@ export class CircuitSession {
   }
 
   public removeComponent(id: string): { removedComponentId: string; removedWireCount: number } {
+    const comp = this.graph.getComponent(id);
+    if (!comp) {
+      throw new Error(`Component with ID '${id}' not found in circuit.`);
+    }
+
+    const removedWires = this.graph
+      .getAllWires()
+      .filter(
+        (w) =>
+          (isPinEndpoint(w.from) && w.from.componentId === id) ||
+          (isPinEndpoint(w.to) && w.to.componentId === id),
+      );
+    this.commandManager.execute(new RemoveComponentCommand(id), this.graph);
     this.isDirty = true;
-    const res = this.graph.removeComponent(id);
     return {
-      removedComponentId: res.removedComponent.id,
-      removedWireCount: res.removedWires.length,
+      removedComponentId: id,
+      removedWireCount: removedWires.length,
     };
   }
 
@@ -291,10 +352,12 @@ export class CircuitSession {
       this.graph.removeWire(wire.id);
       const customWire = { ...wire, id };
       this.graph.addWire(customWire);
+      this.commandManager.pushExecuted(new ConnectWireCommand(customWire));
       this.isDirty = true;
       return customWire;
     }
 
+    this.commandManager.pushExecuted(new ConnectWireCommand(wire));
     this.isDirty = true;
     return wire;
   }
@@ -316,12 +379,14 @@ export class CircuitSession {
       throw new Error(`Pin '${from.pinId}' not found on component '${from.componentId}'.`);
     }
 
-    this.isDirty = true;
-    return this.graph.connectToWireAt(
+    const cmd = new ConnectToWireCommand(
       { componentId: from.componentId, pinId: from.pinId },
       targetWireId,
       hitPoint,
     );
+    this.commandManager.execute(cmd, this.graph);
+    this.isDirty = true;
+    return cmd.result!;
   }
 
   public validate(): ValidationResult {
@@ -408,6 +473,7 @@ export class CircuitSession {
 
   public reset(): void {
     this.graph = new CircuitGraph();
+    this.commandManager.clear();
     this.lastCompiled = undefined;
     this.lastResult = undefined;
     this.isDirty = true;
