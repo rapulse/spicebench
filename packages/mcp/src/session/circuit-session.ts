@@ -5,6 +5,7 @@ import {
   ComponentType,
   Rotation,
   Wire,
+  Junction,
   createDefaultComponent,
   COMPONENT_CATALOG,
   getAbsolutePinPosition,
@@ -52,6 +53,12 @@ export interface ConnectPinsOptions {
   from: { componentId: string; pinId: string };
   to: { componentId: string; pinId: string };
   id?: string;
+}
+
+export interface ConnectToWireOptions {
+  from: { componentId: string; pinId: string };
+  targetWireId: string;
+  hitPoint: { x: number; y: number };
 }
 
 export interface SimulationRunOptions {
@@ -290,6 +297,31 @@ export class CircuitSession {
 
     this.isDirty = true;
     return wire;
+  }
+
+  public connectToWire(options: ConnectToWireOptions): {
+    junction: Junction;
+    branchWire: Wire;
+    wire1: Wire;
+    wire2: Wire;
+  } {
+    const { from, targetWireId, hitPoint } = options;
+
+    const compFrom = this.graph.getComponent(from.componentId);
+    if (!compFrom) {
+      throw new Error(`Source component '${from.componentId}' not found.`);
+    }
+    const pinFrom = getComponentPin(compFrom.type, from.pinId);
+    if (!pinFrom) {
+      throw new Error(`Pin '${from.pinId}' not found on component '${from.componentId}'.`);
+    }
+
+    this.isDirty = true;
+    return this.graph.connectToWireAt(
+      { componentId: from.componentId, pinId: from.pinId },
+      targetWireId,
+      hitPoint,
+    );
   }
 
   public validate(): ValidationResult {

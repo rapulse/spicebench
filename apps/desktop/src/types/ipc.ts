@@ -2,6 +2,7 @@ import type {
   CircuitProject,
   Component,
   Wire,
+  Junction,
   ValidationResult,
 } from "@spicebench/core";
 import type {
@@ -10,6 +11,7 @@ import type {
   PlaceComponentOptions,
   UpdateComponentOptions,
   ConnectPinsOptions,
+  ConnectToWireOptions,
   SimulationRunOptions,
 } from "@spicebench/mcp";
 
@@ -20,6 +22,12 @@ export interface SpicebenchApi {
   updateComponent: (options: UpdateComponentOptions) => Promise<Component>;
   removeComponent: (id: string) => Promise<{ removedComponentId: string; removedWireCount: number }>;
   connectPins: (options: ConnectPinsOptions) => Promise<Wire>;
+  connectToWire: (options: ConnectToWireOptions) => Promise<{
+    junction: Junction;
+    branchWire: Wire;
+    wire1: Wire;
+    wire2: Wire;
+  }>;
   validateCircuit: () => Promise<ValidationResult>;
   runSimulation: (options?: SimulationRunOptions) => Promise<SimulationSummary>;
   setPower: (powerOn: boolean) => Promise<SimulationSummary | null>;

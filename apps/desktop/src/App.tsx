@@ -194,6 +194,39 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleConnectPins = async (options: {
+    from: { componentId: string; pinId: string };
+    to: { componentId: string; pinId: string };
+  }) => {
+    if (window.spicebenchApi) {
+      try {
+        await window.spicebenchApi.connectPins(options);
+        setStatusText(
+          `Connected ${options.from.componentId}:${options.from.pinId} to ${options.to.componentId}:${options.to.pinId}`
+        );
+      } catch (err) {
+        setStatusText(`Connection Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  };
+
+  const handleConnectToWire = async (options: {
+    from: { componentId: string; pinId: string };
+    targetWireId: string;
+    hitPoint: { x: number; y: number };
+  }) => {
+    if (window.spicebenchApi) {
+      try {
+        await window.spicebenchApi.connectToWire(options);
+        setStatusText(
+          `Connected ${options.from.componentId}:${options.from.pinId} to wire at (${options.hitPoint.x}, ${options.hitPoint.y}) with junction`
+        );
+      } catch (err) {
+        setStatusText(`Connection Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  };
+
   const handleRotate = useCallback(async () => {
     if (window.spicebenchApi && selectedIds.length > 0) {
       let rotatedCount = 0;
@@ -301,6 +334,9 @@ export const App: React.FC = () => {
         onCursorMove={setCursorPos}
         onDropComponent={handleDropComponent}
         onMoveComponent={handleMoveComponent}
+        onConnectPins={handleConnectPins}
+        onConnectToWire={handleConnectToWire}
+        onWiringStatusChange={(msg) => msg && setStatusText(msg)}
       />
 
       {/* 6. Win95 Status Bar */}

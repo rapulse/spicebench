@@ -3,8 +3,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DESKTOP_VERSION } from "../src/index";
 import { SchematicSymbol } from "../src/components/SchematicSymbol";
-import { Canvas } from "../src/components/Canvas";
-import type { Component, ComponentType, CircuitProject } from "@spicebench/core";
+import { Canvas, findNearestPointOnWire } from "../src/components/Canvas";
+import type { Component, ComponentType, CircuitProject, Wire } from "@spicebench/core";
 import type { SpicebenchApi } from "../src/types/ipc";
 
 describe("Desktop Package", () => {
@@ -123,6 +123,8 @@ describe("Desktop Package", () => {
           onCursorMove: () => {},
           onDropComponent: () => {},
           onMoveComponent: () => {},
+          onConnectPins: () => {},
+          onConnectToWire: () => {},
         })
       );
 
@@ -132,6 +134,31 @@ describe("Desktop Package", () => {
       expect(markup).toContain('id="symbol-C1"');
       // R1 is selected -> stroke blue
       expect(markup).toContain('stroke="#0000ff"');
+    });
+
+    it("accurately projects hit points onto orthogonal wire segments for T-junction wire splitting", () => {
+      const testWire: Wire = {
+        id: "W_TEST",
+        from: { componentId: "V1", pinId: "pos" },
+        to: { componentId: "R1", pinId: "1" },
+        points: [
+          { x: 10, y: 10 },
+          { x: 25, y: 10 },
+          { x: 25, y: 20 },
+        ],
+      };
+
+      // Point near horizontal segment (10,10) -> (25,10)
+      const hitH = findNearestPointOnWire(testWire, { x: 18.2, y: 10.3 });
+      expect(hitH).not.toBeNull();
+      expect(hitH!.point).toEqual({ x: 18, y: 10 });
+      expect(hitH!.distance).toBeLessThan(0.5);
+
+      // Point near vertical segment (25,10) -> (25,20)
+      const hitV = findNearestPointOnWire(testWire, { x: 24.8, y: 15.1 });
+      expect(hitV).not.toBeNull();
+      expect(hitV!.point).toEqual({ x: 25, y: 15 });
+      expect(hitV!.distance).toBeLessThan(0.5);
     });
 
     it("calculates +90 rotation sequence correctly for all 4 orientations", () => {
@@ -197,6 +224,27 @@ describe("Desktop Package", () => {
           from: { componentId: "R1", pinId: "1" },
           to: { componentId: "R2", pinId: "1" },
           points: [],
+        }),
+        connectToWire: async () => ({
+          junction: { id: "J1", position: { x: 10, y: 10 } },
+          branchWire: {
+            id: "W2",
+            from: { componentId: "R1", pinId: "1" },
+            to: { junctionId: "J1" },
+            points: [],
+          },
+          wire1: {
+            id: "W1",
+            from: { componentId: "V1", pinId: "pos" },
+            to: { junctionId: "J1" },
+            points: [],
+          },
+          wire2: {
+            id: "W3",
+            from: { junctionId: "J1" },
+            to: { componentId: "R2", pinId: "1" },
+            points: [],
+          },
         }),
         validateCircuit: async () => ({
           isValid: true,

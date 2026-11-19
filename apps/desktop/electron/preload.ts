@@ -10,6 +10,7 @@ const api: SpicebenchApi = {
   updateComponent: (opts) => ipcRenderer.invoke("spicebench:update-component", opts),
   removeComponent: (id) => ipcRenderer.invoke("spicebench:remove-component", id),
   connectPins: (opts) => ipcRenderer.invoke("spicebench:connect-pins", opts),
+  connectToWire: (opts) => ipcRenderer.invoke("spicebench:connect-to-wire", opts),
   validateCircuit: () => ipcRenderer.invoke("spicebench:validate-circuit"),
   runSimulation: (opts) => ipcRenderer.invoke("spicebench:run-simulation", opts),
   setPower: (powerOn) => ipcRenderer.invoke("spicebench:set-power", powerOn),

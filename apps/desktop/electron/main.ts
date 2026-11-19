@@ -88,6 +88,12 @@ function registerIpcHandlers() {
     return wire;
   });
 
+  ipcMain.handle("spicebench:connect-to-wire", (_e, opts) => {
+    const res = session.connectToWire(opts);
+    broadcastCircuitUpdate();
+    return res;
+  });
+
   ipcMain.handle("spicebench:validate-circuit", () => session.validate());
 
   ipcMain.handle("spicebench:run-simulation", async (_e, opts) => {
