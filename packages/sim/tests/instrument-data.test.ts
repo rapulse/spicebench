@@ -269,6 +269,42 @@ describe("Instrument data on ngspice (Power On)", () => {
     expect(a[k]!).toBeCloseTo(Math.sin(2 * Math.PI * 1e3 * s.time[k]!), 2);
   });
 
+  it("AC source value is RMS (EWB, ADR-012): 10 V / 1 kHz on 1.5k + 240 mH, AC meters", async () => {
+    // Reference: electronics-workbench/Image-1 2.jpeg (EWB 5.12, ammeter ≈ 4.67 mA there).
+    const g = build(
+      [
+        ["AC_VOLTAGE_SOURCE", "V1", { voltage: "10V", frequency: "1kHz" }],
+        ["RESISTOR", "R1", { resistance: "1.5k" }],
+        ["INDUCTOR", "L1", { inductance: "240m" }],
+        ["MULTIMETER", "XMM_A", { mode: "A", currentType: "AC" }],
+        ["MULTIMETER", "XMM_R", { mode: "V", currentType: "AC" }],
+        ["MULTIMETER", "XMM_L", { mode: "V", currentType: "AC" }],
+        ["GROUND", "GND1"],
+      ],
+      [
+        [["V1", "pos"], ["R1", "1"]],
+        [["R1", "2"], ["L1", "1"]],
+        [["L1", "2"], ["XMM_A", "pos"]],
+        [["XMM_A", "neg"], ["GND1", "0"]],
+        [["V1", "neg"], ["GND1", "0"]],
+        [["XMM_R", "pos"], ["R1", "1"]],
+        [["XMM_R", "neg"], ["R1", "2"]],
+        [["XMM_L", "pos"], ["L1", "1"]],
+        [["XMM_L", "neg"], ["L1", "2"]],
+      ],
+    );
+    for (const [id, mode] of [["XMM_A", "A"], ["XMM_R", "V"], ["XMM_L", "V"]] as const) {
+      g.setInstrument(MultimeterStateSchema.parse({ instrumentId: id, mode, currentType: "AC" }));
+    }
+    const { data } = await powerOn(g);
+    const xl = 2 * Math.PI * 1e3 * 0.24;
+    const i = 10 / Math.hypot(1500, xl); // 4.701 mA RMS
+    const val = (id: string) => (data[id] as MultimeterData).value!;
+    expect(Math.abs(val("XMM_A") - i) / i).toBeLessThan(5e-3);
+    expect(Math.abs(val("XMM_R") - i * 1500) / (i * 1500)).toBeLessThan(5e-3);
+    expect(Math.abs(val("XMM_L") - i * xl) / (i * xl)).toBeLessThan(5e-3);
+  });
+
   it("Oscilloscope without connections reports not_connected (no fake flat 0 V trace)", async () => {
     const g = build(
       [

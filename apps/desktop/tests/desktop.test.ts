@@ -605,7 +605,7 @@ describe("Desktop Package", () => {
             running: true,
             port: 3100,
             host: "localhost",
-            sseUrl: "http://localhost:3100/sse",
+            mcpUrl: "http://127.0.0.1:3100/mcp",
             activeSessions: 1,
             recentActions: [
               { id: "1", tool: "place_component", description: "Placed R1", timestamp: Date.now() },
@@ -627,7 +627,7 @@ describe("Desktop Package", () => {
             running: true,
             port: 3100,
             host: "localhost",
-            sseUrl: "http://localhost:3100/sse",
+            mcpUrl: "http://127.0.0.1:3100/mcp",
             activeSessions: 1,
             recentActions: [
               { id: "act1", tool: "place_component", description: "Placed R1", timestamp: Date.now() },
@@ -642,7 +642,8 @@ describe("Desktop Package", () => {
       expect(markup).toContain("Server Status");
       expect(markup).toContain("AI Activity Log (1)");
       expect(markup).toContain("Client Configs");
-      expect(markup).toContain("Running (Streamable HTTP / SSE)");
+      expect(markup).toContain("Running (Streamable HTTP)");
+      expect(markup).toContain("http://127.0.0.1:3100/mcp");
       expect(markup).toContain("3100");
     });
   });

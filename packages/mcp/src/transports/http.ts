@@ -2,15 +2,14 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 /**
  * Local HTTP transport for the MCP server (ADR-010).
  *
  * - `POST|GET|DELETE /mcp` — Streamable HTTP (current MCP spec), stateful sessions.
- * - `GET /sse` + `POST /messages?sessionId=` — legacy HTTP+SSE for older clients.
  * - `GET /health` — status JSON.
+ * The deprecated HTTP+SSE transport is intentionally not served: there are no legacy clients.
  *
  * Every client session gets its own McpServer instance (an McpServer can be bound to only one
  * transport); all instances share one CircuitSession through `createServer`.
@@ -37,8 +36,6 @@ export interface HttpTransportInstance {
   host: string;
   /** Streamable HTTP endpoint URL. */
   mcpUrl: string;
-  /** Legacy SSE endpoint URL. */
-  sseUrl: string;
   activeSessions: () => number;
   close: () => Promise<void>;
 }
@@ -97,11 +94,10 @@ export async function startHttpTransport(
   const originAllowed = options.allowedOrigins ?? isLoopbackOrigin;
 
   interface Session {
-    transport: StreamableHTTPServerTransport | SSEServerTransport;
+    transport: StreamableHTTPServerTransport;
     server: McpServer;
   }
   const streamable = new Map<string, Session>();
-  const legacy = new Map<string, Session>();
 
   const closeSession = async (s: Session): Promise<void> => {
     await s.transport.close().catch(() => undefined);
@@ -144,8 +140,7 @@ export async function startHttpTransport(
           service: "SpiceBench MCP Server",
           version: "0.1.0",
           mcpEndpoint: "/mcp",
-          legacySseEndpoint: "/sse",
-          activeSessions: streamable.size + legacy.size,
+          activeSessions: streamable.size,
         });
         return;
       }
@@ -162,7 +157,7 @@ export async function startHttpTransport(
             return;
           }
           const body = req.method === "POST" ? await readJsonBody(req) : undefined;
-          await (s.transport as StreamableHTTPServerTransport).handleRequest(req, res, body);
+          await s.transport.handleRequest(req, res, body);
           return;
         }
 
@@ -192,28 +187,6 @@ export async function startHttpTransport(
         return;
       }
 
-      // --- Legacy HTTP+SSE ---
-      if (pathname === "/sse" && req.method === "GET") {
-        const transport = new SSEServerTransport("/messages", res);
-        const server = createServer();
-        legacy.set(transport.sessionId, { transport, server });
-        transport.onclose = () => {
-          if (legacy.delete(transport.sessionId)) void server.close().catch(() => undefined);
-        };
-        await server.connect(transport);
-        return;
-      }
-      if (pathname === "/messages" && req.method === "POST") {
-        const sid = url.searchParams.get("sessionId");
-        const s = sid ? legacy.get(sid) : undefined;
-        if (!s) {
-          jsonRpcError(res, 404, "Session not found");
-          return;
-        }
-        await (s.transport as SSEServerTransport).handlePostMessage(req, res);
-        return;
-      }
-
       jsonRpcError(res, 404, "Not Found");
     } catch (err) {
       jsonRpcError(res, 500, `Internal error: ${err instanceof Error ? err.message : String(err)}`);
@@ -237,12 +210,10 @@ export async function startHttpTransport(
     port: boundPort,
     host,
     mcpUrl: `http://${urlHost}:${boundPort}/mcp`,
-    sseUrl: `http://${urlHost}:${boundPort}/sse`,
-    activeSessions: () => streamable.size + legacy.size,
+    activeSessions: () => streamable.size,
     close: async () => {
-      const all = [...streamable.values(), ...legacy.values()];
+      const all = [...streamable.values()];
       streamable.clear();
-      legacy.clear();
       await Promise.all(all.map(closeSession));
       httpServer.closeAllConnections?.();
       await new Promise<void>((resolve, reject) => httpServer.close((e) => (e ? reject(e) : resolve())));

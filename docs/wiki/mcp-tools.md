@@ -16,8 +16,8 @@
    - Запуск: `--transport http --port 3100`. Electron Main поднимает этот же сервер автоматически.
    - Слушает только loopback (`127.0.0.1`). Привязку к адресу не-loopback сервер отклоняет.
    - Эндпоинты:
-     - `POST|GET|DELETE /mcp` — **Streamable HTTP** (основной; сессии через заголовок `Mcp-Session-Id`).
-     - `GET /sse` + `POST /messages?sessionId=...` — legacy HTTP+SSE для старых клиентов.
+     - `POST|GET|DELETE /mcp` — **Streamable HTTP**, единственный MCP-путь (сессии через `Mcp-Session-Id`).
+       Устаревший HTTP+SSE (`/sse`) не поддерживается (ADR-010).
      - `GET /health` — статус и число активных сессий.
    - Каждый клиент получает свой экземпляр `McpServer` поверх **общего** `CircuitSession`:
      несколько агентов и GUI видят одну схему.

@@ -57,7 +57,6 @@ function getMcpStatus() {
     port: mcpPort,
     host: MCP_HOST,
     mcpUrl: `http://${MCP_HOST}:${mcpPort}/mcp`,
-    sseUrl: `http://${MCP_HOST}:${mcpPort}/sse`,
     activeSessions: mcpTransport?.activeSessions() ?? 0,
     recentActions: session.getActionHistory(),
   };
@@ -71,7 +70,7 @@ async function startMcpServer(port = mcpPort) {
     mcpPort = port;
     mcpTransport = await startHttpTransport(createMcpServerForClient, { port: mcpPort, host: MCP_HOST });
     mcpRunning = true;
-    console.log(`[SpiceBench MCP]: Server running at ${mcpTransport.mcpUrl} (legacy SSE: ${mcpTransport.sseUrl})`);
+    console.log(`[SpiceBench MCP]: Server running at ${mcpTransport.mcpUrl}`);
     broadcastMcpStatus();
   } catch (err) {
     mcpRunning = false;

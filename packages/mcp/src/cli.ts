@@ -27,7 +27,7 @@ Options:
   --transport <stdio|http>   Transport mode to use (default: stdio)
   --port <number>            Port for HTTP transport (default: 3100, loopback only)
 
-HTTP endpoints: /mcp (Streamable HTTP), /sse (legacy SSE), /health
+HTTP endpoints: /mcp (Streamable HTTP), /health
   --help, -h                 Show this help message
 `);
       process.exit(0);
@@ -38,7 +38,7 @@ HTTP endpoints: /mcp (Streamable HTTP), /sse (legacy SSE), /health
     // One shared circuit; a separate McpServer per connected client.
     const { session } = createSpiceBenchMcpServer();
     const instance = await startHttpTransport(() => createSpiceBenchMcpServer({ session }).server, { port });
-    console.error(`[SpiceBench MCP] HTTP server: ${instance.mcpUrl} (legacy SSE: ${instance.sseUrl})`);
+    console.error(`[SpiceBench MCP] HTTP server: ${instance.mcpUrl}`);
   } else {
     const { server } = createSpiceBenchMcpServer();
     await startStdioTransport(server);

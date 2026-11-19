@@ -8,7 +8,6 @@ import {
   CircuitSession,
 } from "../src/index";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
 describe("Phase 3: Autonomous MCP Server & Tools Integration", () => {
   let client: Client;
@@ -364,7 +363,7 @@ function rawRequest(
   });
 }
 
-describe("ADR-010: HTTP transport (Streamable HTTP + legacy SSE, loopback security)", () => {
+describe("ADR-010: HTTP transport (Streamable HTTP, loopback security)", () => {
   const initBody = JSON.stringify({
     jsonrpc: "2.0",
     id: 1,
@@ -373,18 +372,18 @@ describe("ADR-010: HTTP transport (Streamable HTTP + legacy SSE, loopback securi
   });
   const mcpHeaders = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
 
-  it("two Streamable HTTP clients and one legacy SSE client share one circuit", async () => {
+  it("three Streamable HTTP clients share one circuit; legacy /sse is not served", async () => {
     const shared = new CircuitSession();
     const httpInstance = await startHttpTransport(() => createSpiceBenchMcpServer({ session: shared }).server, {
       port: 0,
     });
     const a = new Client({ name: "agent-a", version: "1" });
     const b = new Client({ name: "agent-b", version: "1" });
-    const c = new Client({ name: "agent-legacy", version: "1" });
+    const c = new Client({ name: "agent-c", version: "1" });
     try {
       await a.connect(new StreamableHTTPClientTransport(new URL(httpInstance.mcpUrl)));
       await b.connect(new StreamableHTTPClientTransport(new URL(httpInstance.mcpUrl)));
-      await c.connect(new SSEClientTransport(new URL(httpInstance.sseUrl)));
+      await c.connect(new StreamableHTTPClientTransport(new URL(httpInstance.mcpUrl)));
       expect(httpInstance.activeSessions()).toBe(3);
 
       await a.callTool({ name: "place_component", arguments: { type: "RESISTOR", id: "R7", x: 1, y: 1 } });
@@ -396,6 +395,7 @@ describe("ADR-010: HTTP transport (Streamable HTTP + legacy SSE, loopback securi
       // Client A still works after B and C connected (old single-McpServer bug)
       const tools = await a.listTools();
       expect(tools.tools.length).toBeGreaterThan(5);
+      expect((await rawRequest(httpInstance.port, "GET", "/sse")).status).toBe(404);
     } finally {
       await Promise.allSettled([a.close(), b.close(), c.close()]);
       await httpInstance.close();

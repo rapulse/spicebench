@@ -28,7 +28,7 @@
 | `POLARIZED_CAPACITOR` | `C_<id> <pos> <neg> <value>` | `C_C1 N001 0 10u` |
 | `INDUCTOR` | `L_<id> <n1> <n2> <value> [IC=<i>]` | `L_L1 N001 N002 10m` |
 | `DC_VOLTAGE_SOURCE` | `V_<id> <pos> <neg> DC <value>` | `V_V1 N001 0 DC 12` |
-| `AC_VOLTAGE_SOURCE` | `V_<id> <pos> <neg> SIN(0 <ampl> <freq>) AC <ampl>` | `V_V1 N001 0 SIN(0 120 60) AC 120` |
+| `AC_VOLTAGE_SOURCE` | `voltage` = **RMS** (ADR-012): `V_<id> <pos> <neg> DC 0 AC <Vrms> <ph> SIN(0 <Vrms·√2> <f> 0 0 <ph>)` | `V_V1 N001 0 DC 0 AC 120 0 SIN(0 169.706 60 0 0 0)` |
 | `DC_CURRENT_SOURCE` | `I_<id> <pos> <neg> DC <value>` | `I_I1 N001 0 DC 1` |
 | `PULSE_VOLTAGE_SOURCE` | `V_<id> <pos> <neg> PULSE(v1 v2 delay tr tf width period)` | `V_V1 N001 0 PULSE(0 5 0 10n 10n 0.5m 1m)` |
 | `DIODE` | `D_<id> <anode> <cathode> <model>` | `D_D1 N001 N002 1N4148` |
@@ -48,16 +48,19 @@
 
 ## 3. Виртуальные приборы
 
-* **Функциональный генератор (`FUNCTION_GENERATOR`):**
-  * Синус: `V_<id> <pos> <com> SIN(0 <ampl> <freq>) AC <ampl>`
-  * Меандр / Треугольник: директива `PULSE(...)` с вычисленными фронтами и полупериодом.
-* **Мультиметр (`MULTIMETER`):**
-  * В режиме вольтметра (`mode: "V"`): параллельное измерительное сопротивление `R_<id>_sense <pos> <neg> 10meg`.
-  * В режиме амперметра (`mode: "A"`): последовательный нулевой источник `V_<id>_sense <pos> <neg> 0V` (ток извлекается через `I(V_<id>_sense)`).
-* **Осциллограф (`OSCILLOSCOPE`):**
-  * Входные каналы A и B: нагрузочные резисторы `1meg` между выводами каждого канала.
-* **Плоттер Боде (`BODE_PLOTTER`):**
-  * Высокоомные входы `in` и `out`: резисторы `10meg`.
+* **Функциональный генератор (`FUNCTION_GENERATOR`):** амплитуда пиковая относительно COM, учитываются
+  `offset` и `dutyCycle`; выход «−» — `E_<id>_neg <neg> <com> <pos> <com> -1` (ADR-011).
+  * Синус: `V_<id> <pos> <com> DC <off> AC <A> SIN(<off> <A> <f>)`
+  * Меандр / треугольник: `PULSE(<off-A> <off+A> ...)` с фронтами по скважности.
+  * Без подключённого COM генератор в нетлист не попадает.
+* **Мультиметр (`MULTIMETER`):** режим берётся из окна прибора (ADR-011); если щуп не подключён,
+  прибор в нетлист не попадает.
+  * Вольтметр/dB (`V`, `dB`): `R_<id>_sense <pos> <neg> 10meg`.
+  * Амперметр (`A`): `V_<id>_sense <pos> <neg> DC 0` (ток — `i(v_<id>_sense)`).
+  * Омметр (`R`): `I_<id>_ohm <neg> <pos> DC 1m`, R = V(+,−)/1 мА.
+* **Осциллограф (`OSCILLOSCOPE`):** вход `1meg` на канал, только если подключён «+»; неподключённый
+  «−» = земля.
+* **Плоттер Боде (`BODE_PLOTTER`):** входы `10meg`, по тем же правилам подключения.
 
 ---
 

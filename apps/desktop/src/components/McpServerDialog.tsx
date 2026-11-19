@@ -141,7 +141,7 @@ export const McpServerDialog: React.FC<McpServerDialogProps> = ({
                       }}
                     />
                     <strong style={{ fontSize: "13px" }}>
-                      {isRunning ? "Running (Streamable HTTP / SSE)" : "Stopped"}
+                      {isRunning ? "Running (Streamable HTTP)" : "Stopped"}
                     </strong>
                   </div>
 
@@ -168,7 +168,7 @@ export const McpServerDialog: React.FC<McpServerDialogProps> = ({
                 </div>
 
                 <div className="field-row" style={{ marginTop: "8px" }}>
-                  <label style={{ width: "90px" }}>SSE Endpoint:</label>
+                  <label style={{ width: "90px" }}>MCP Endpoint:</label>
                   <input
                     type="text"
                     readOnly

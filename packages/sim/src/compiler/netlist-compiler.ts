@@ -213,12 +213,15 @@ export class NetlistCompiler {
       }
 
       case "AC_VOLTAGE_SOURCE": {
+        // EWB semantics (ADR-012): "voltage" is RMS. Transient amplitude = RMS·√2;
+        // .ac magnitude = RMS so AC-analysis node voltages read like the EWB AC meter.
         const nPos = getNode(comp.id, "pos");
         const nNeg = getNode(comp.id, "neg");
-        const vVal = parseEngineeringValue(comp.params["voltage"] ?? comp.params["amplitude"] ?? "120V");
-        const fVal = parseEngineeringValue(comp.params["frequency"] ?? "60Hz");
+        const vRms = parseEngineeringValue(comp.params["voltage"] ?? comp.params["amplitude"] ?? "120V").value;
+        const f = parseEngineeringValue(comp.params["frequency"] ?? "60Hz").value;
+        const phase = parseFloat(String(comp.params["phase"] ?? "0").replace(/deg$/i, "")) || 0;
         lines.push(
-          `V_${comp.id} ${nPos} ${nNeg} SIN(0 ${vVal.spiceValue} ${fVal.spiceValue}) AC ${vVal.spiceValue}`,
+          `V_${comp.id} ${nPos} ${nNeg} DC 0 AC ${sv(vRms)} ${phase} SIN(0 ${sv(vRms * Math.SQRT2)} ${sv(f)} 0 0 ${phase})`,
         );
         break;
       }
