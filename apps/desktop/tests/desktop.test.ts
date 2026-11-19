@@ -27,6 +27,7 @@ describe("Desktop Package", () => {
       "DC_VOLTAGE_SOURCE",
       "AC_VOLTAGE_SOURCE",
       "DC_CURRENT_SOURCE",
+      "PULSE_VOLTAGE_SOURCE",
       "RESISTOR",
       "CAPACITOR",
       "POLARIZED_CAPACITOR",
@@ -36,8 +37,20 @@ describe("Desktop Package", () => {
       "LED",
       "BJT_NPN",
       "BJT_PNP",
+      "NMOS",
+      "PMOS",
+      "OPAMP",
       "OPAMP_IDEAL",
       "OPAMP_741",
+      "TIMER_555",
+      "AND_GATE",
+      "OR_GATE",
+      "NOT_GATE",
+      "NAND_GATE",
+      "NOR_GATE",
+      "XOR_GATE",
+      "BULB",
+      "SEVEN_SEGMENT",
       "SWITCH_SPST",
       "POTENTIOMETER",
       "MULTIMETER",
@@ -46,7 +59,7 @@ describe("Desktop Package", () => {
       "BODE_PLOTTER",
     ];
 
-    it("renders valid SVG markup for all 21 component types", () => {
+    it("renders valid SVG markup for all component types", () => {
       for (const type of allTypes) {
         const component: Component = {
           id: `TEST_${type}`,
@@ -631,6 +644,97 @@ describe("Desktop Package", () => {
       expect(markup).toContain("Client Configs");
       expect(markup).toContain("Running (Streamable HTTP / SSE)");
       expect(markup).toContain("3100");
+    });
+  });
+
+  describe("Phase 8: Component Expansion & Live Interactivity", () => {
+    it("renders SWITCH_SPST open vs closed state accurately", () => {
+      const openSwitch: Component = {
+        id: "SW1",
+        type: "SWITCH_SPST",
+        label: "SW1",
+        position: { x: 5, y: 5 },
+        rotation: 0,
+        params: { state: "open" },
+      };
+      const closedSwitch: Component = {
+        ...openSwitch,
+        id: "SW2",
+        params: { state: "closed" },
+      };
+
+      const openMarkup = renderToStaticMarkup(
+        React.createElement(SchematicSymbol, { component: openSwitch })
+      );
+      const closedMarkup = renderToStaticMarkup(
+        React.createElement(SchematicSymbol, { component: closedSwitch })
+      );
+
+      // Open switch blade slopes upwards to y="-12"
+      expect(openMarkup).toContain('y2="-12"');
+      // Closed switch blade connects straight to (8, 0)
+      expect(closedMarkup).toContain('x2="8" y2="0"');
+    });
+
+    it("renders BULB with glowing halo when simulated voltage is active", () => {
+      const bulb: Component = {
+        id: "L1",
+        type: "BULB",
+        label: "L1",
+        position: { x: 10, y: 10 },
+        rotation: 0,
+        params: { voltage: "12V" },
+      };
+
+      // Unlit bulb (0V)
+      const unlitMarkup = renderToStaticMarkup(
+        React.createElement(SchematicSymbol, {
+          component: bulb,
+          pinVoltages: { "L1:1": 0, "L1:2": 0 },
+        })
+      );
+      expect(unlitMarkup).not.toContain("#ffdd00");
+
+      // Lit bulb (12V across terminals)
+      const litMarkup = renderToStaticMarkup(
+        React.createElement(SchematicSymbol, {
+          component: bulb,
+          pinVoltages: { "L1:1": 12, "L1:2": 0 },
+        })
+      );
+      expect(litMarkup).toContain("#ffdd00"); // Radial glow halo
+      expect(litMarkup).toContain("#ffffaa"); // Bright illuminated glass
+    });
+
+    it("renders SEVEN_SEGMENT display with red active segments when pin voltage > 2.0V", () => {
+      const disp: Component = {
+        id: "DS1",
+        type: "SEVEN_SEGMENT",
+        label: "DS1",
+        position: { x: 15, y: 15 },
+        rotation: 0,
+        params: {},
+      };
+
+      // Digit '1': segments b and c HIGH, others LOW
+      const digit1Markup = renderToStaticMarkup(
+        React.createElement(SchematicSymbol, {
+          component: disp,
+          pinVoltages: {
+            "DS1:a": 0,
+            "DS1:b": 5.0,
+            "DS1:c": 5.0,
+            "DS1:d": 0,
+            "DS1:e": 0,
+            "DS1:f": 0,
+            "DS1:g": 0,
+          },
+        })
+      );
+
+      // Bright red for active segments (#ff2020) and dark maroon for inactive segments (#2a0505)
+      expect(digit1Markup).toContain("#ff2020");
+      expect(digit1Markup).toContain("#2a0505");
     });
   });
 });

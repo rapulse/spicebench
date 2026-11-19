@@ -20,6 +20,7 @@ export const PartsBin: React.FC<PartsBinProps> = ({ onSelectComponent }) => {
       { type: "DC_VOLTAGE_SOURCE", label: "DC Source", icon: "🔋" },
       { type: "AC_VOLTAGE_SOURCE", label: "AC Source", icon: "⚡" },
       { type: "DC_CURRENT_SOURCE", label: "Current Src", icon: "➔" },
+      { type: "PULSE_VOLTAGE_SOURCE", label: "Pulse/Clock", icon: "⎍" },
     ],
     Basic: [
       { type: "RESISTOR", label: "Resistor", icon: "∿" },
@@ -37,6 +38,26 @@ export const PartsBin: React.FC<PartsBinProps> = ({ onSelectComponent }) => {
     Transistors: [
       { type: "BJT_NPN", label: "BJT NPN", icon: "◓" },
       { type: "BJT_PNP", label: "BJT PNP", icon: "◑" },
+      { type: "NMOS", label: "NMOS", icon: "⊣" },
+      { type: "PMOS", label: "PMOS", icon: "⊢" },
+    ],
+    Analog: [
+      { type: "OPAMP_IDEAL", label: "Op-Amp (Ideal)", icon: "▷" },
+      { type: "OPAMP_741", label: "LM741", icon: "▷+" },
+      { type: "TIMER_555", label: "555 Timer", icon: "⌗" },
+    ],
+    Digital: [
+      { type: "AND_GATE", label: "AND Gate", icon: "&" },
+      { type: "OR_GATE", label: "OR Gate", icon: "≥1" },
+      { type: "NOT_GATE", label: "NOT Inverter", icon: "1°" },
+      { type: "NAND_GATE", label: "NAND Gate", icon: "&°" },
+      { type: "NOR_GATE", label: "NOR Gate", icon: "≥1°" },
+      { type: "XOR_GATE", label: "XOR Gate", icon: "=1" },
+    ],
+    Indicators: [
+      { type: "BULB", label: "Lamp/Bulb", icon: "💡" },
+      { type: "SEVEN_SEGMENT", label: "7-Segment", icon: "🈲" },
+      { type: "LED", label: "Red LED", icon: "🔴" },
     ],
     Instruments: [
       { type: "MULTIMETER", label: "Multimeter", icon: "📟" },

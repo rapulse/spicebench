@@ -34,6 +34,8 @@ interface CanvasProps {
   }) => void;
   onWiringStatusChange?: (status: string | null) => void;
   onComponentDoubleClick?: (component: Component) => void;
+  onToggleSwitch?: (component: Component) => void;
+  onAdjustPotentiometer?: (component: Component, deltaPct: number) => void;
   children?: React.ReactNode;
 }
 
@@ -112,6 +114,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onConnectToWire,
   onWiringStatusChange,
   onComponentDoubleClick,
+  onToggleSwitch,
+  onAdjustPotentiometer,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -434,6 +438,10 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
       }
 
+      if (comp.type === "SWITCH_SPST") {
+        onToggleSwitch?.(comp);
+      }
+
       setDraggingComp({
         id: comp.id,
         startX: comp.position.x,
@@ -601,9 +609,19 @@ export const Canvas: React.FC<CanvasProps> = ({
                   e.stopPropagation();
                   onComponentDoubleClick?.(comp);
                 }}
+                onWheel={(e) => {
+                  if (comp.type === "POTENTIOMETER") {
+                    e.stopPropagation();
+                    onAdjustPotentiometer?.(comp, e.deltaY < 0 ? 5 : -5);
+                  }
+                }}
                 cursor={wiring ? "crosshair" : isBeingDragged ? "grabbing" : "grab"}
               >
-                <SchematicSymbol component={comp} isSelected={isCompSelected} />
+                <SchematicSymbol
+                  component={comp}
+                  isSelected={isCompSelected}
+                  pinVoltages={simulation?.pinVoltages}
+                />
 
                 {/* Component Pin Terminals (Interactive Click/Hover Dots) */}
                 {pins.map((pin) => {

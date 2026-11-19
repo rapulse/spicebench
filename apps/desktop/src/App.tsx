@@ -221,7 +221,79 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  const handleOpenSample = async (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => {
+  const handleImportNetlist = useCallback(async () => {
+    if (window.spicebenchApi?.importNetlist) {
+      try {
+        const res = await window.spicebenchApi.importNetlist();
+        if (res) {
+          setCircuit(res.circuit);
+          updateStats(res.circuit);
+          setSelectedIds([]);
+          setPowerOn(false);
+          setSimulation(null);
+          setStatusText(
+            `Imported SPICE netlist: ${res.name} (${res.circuit.components.length} components)`
+          );
+        }
+      } catch (err) {
+        setStatusText(`Import error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, []);
+
+  const handleToggleSwitch = useCallback(
+    async (comp: Component) => {
+      if (window.spicebenchApi) {
+        const currentState = comp.params["state"] || "open";
+        const nextState = currentState === "closed" ? "open" : "closed";
+        try {
+          await window.spicebenchApi.updateComponent({
+            id: comp.id,
+            params: { ...comp.params, state: nextState },
+          });
+          setStatusText(`Switch '${comp.id}' ${nextState}`);
+          if (powerOn) {
+            const sim = await window.spicebenchApi.runSimulation();
+            setSimulation(sim);
+          }
+        } catch (err) {
+          setStatusText(
+            `Error toggling switch: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    },
+    [powerOn]
+  );
+
+  const handleAdjustPotentiometer = useCallback(
+    async (comp: Component, deltaPct: number) => {
+      if (window.spicebenchApi) {
+        const currentPct = parseFloat(comp.params["percent"] || "50");
+        const nextPct = Math.min(100, Math.max(0, Math.round(currentPct + deltaPct)));
+        try {
+          await window.spicebenchApi.updateComponent({
+            id: comp.id,
+            params: { ...comp.params, percent: String(nextPct) },
+          });
+          setStatusText(`Potentiometer '${comp.id}' set to ${nextPct}%`);
+          if (powerOn) {
+            const sim = await window.spicebenchApi.runSimulation();
+            setSimulation(sim);
+          }
+        } catch (err) {
+          setStatusText(
+            `Error adjusting pot: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    },
+    [powerOn]
+  );
+
+  const handleOpenSample = async (
+    sampleName: "voltage-divider" | "rc-step" | "rlc-filter" | "interactive-logic"
+  ) => {
     if (window.spicebenchApi) {
       const c = await window.spicebenchApi.loadSampleCircuit(sampleName);
       setCircuit(c);
@@ -553,6 +625,22 @@ export const App: React.FC = () => {
       } else if (e.key === "Escape") {
         setSelectedIds([]);
         setStatusText("Selection cleared");
+      } else if (e.key === " " || e.key === "Spacebar") {
+        const selectedSwitch = circuit.components.find(
+          (c) => selectedIds.includes(c.id) && c.type === "SWITCH_SPST"
+        );
+        if (selectedSwitch) {
+          e.preventDefault();
+          handleToggleSwitch(selectedSwitch);
+        }
+      } else if (e.key === "[" || e.key === "]") {
+        const selectedPot = circuit.components.find(
+          (c) => selectedIds.includes(c.id) && c.type === "POTENTIOMETER"
+        );
+        if (selectedPot) {
+          e.preventDefault();
+          handleAdjustPotentiometer(selectedPot, e.key === "[" ? -5 : 5);
+        }
       }
     };
 
@@ -567,6 +655,10 @@ export const App: React.FC = () => {
     handleRotate,
     handleDelete,
     handleSelectAll,
+    circuit.components,
+    selectedIds,
+    handleToggleSwitch,
+    handleAdjustPotentiometer,
   ]);
 
   return (
@@ -580,6 +672,7 @@ export const App: React.FC = () => {
         onOpen={handleOpenProject}
         onSave={handleSaveProject}
         onExportNetlist={handleExportNetlist}
+        onImportNetlist={handleImportNetlist}
         onOpenSample={handleOpenSample}
         onValidate={handleValidate}
         onSimulate={handleSimulate}
@@ -624,6 +717,8 @@ export const App: React.FC = () => {
         onConnectToWire={handleConnectToWire}
         onWiringStatusChange={(msg) => msg && setStatusText(msg)}
         onComponentDoubleClick={handleComponentDoubleClick}
+        onToggleSwitch={handleToggleSwitch}
+        onAdjustPotentiometer={handleAdjustPotentiometer}
       >
         {/* Floating Instrument Windows */}
         {circuit.instruments

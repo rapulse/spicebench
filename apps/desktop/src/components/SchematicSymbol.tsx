@@ -4,9 +4,14 @@ import type { Component } from "@spicebench/core";
 interface SchematicSymbolProps {
   component: Component;
   isSelected?: boolean;
+  pinVoltages?: Record<string, number>;
 }
 
-export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isSelected }) => {
+export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
+  component,
+  isSelected,
+  pinVoltages,
+}) => {
   const { type, rotation = 0, params } = component;
   const strokeColor = isSelected ? "#0000ff" : "#000000";
   const strokeWidth = isSelected ? 2.5 : 2;
@@ -17,9 +22,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
       case "RESISTOR":
         return (
           <g>
-            {/* Terminal leads: (-20, 0) to (-12, 0) and (12, 0) to (20, 0) */}
             <line x1="-20" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Zigzag body */}
             <polyline
               points="-12,0 -9,-6 -4,6 1,-6 6,6 9,-6 12,0"
               fill="none"
@@ -30,6 +33,48 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
             <line x1="12" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
+
+      case "POTENTIOMETER": {
+        const pct = Math.min(100, Math.max(0, parseFloat(params["percent"] || "50")));
+        const wiperX = -10 + (pct / 100) * 20;
+        return (
+          <g>
+            <line x1="-20" y1="-6" x2="-12" y2="-6" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline
+              points="-12,-6 -9,-12 -4,0 1,-12 6,0 9,-12 12,-6"
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+            />
+            <line x1="12" y1="-6" x2="20" y2="-6" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Wiper arrow */}
+            <line x1="0" y1="20" x2="0" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="10" x2={wiperX} y2="-1" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polygon
+              points={`${wiperX},-4 ${wiperX - 3},2 ${wiperX + 3},2`}
+              fill={strokeColor}
+            />
+          </g>
+        );
+      }
+
+      case "SWITCH_SPST": {
+        const isClosed = params["state"] === "closed";
+        return (
+          <g>
+            <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <circle cx="-8" cy="0" r="2.5" fill={strokeColor} />
+            {isClosed ? (
+              <line x1="-8" y1="0" x2="8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
+            ) : (
+              <line x1="-8" y1="0" x2="6" y2="-12" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
+            )}
+            <circle cx="8" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+      }
 
       case "CAPACITOR":
         return (
@@ -79,13 +124,12 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
       case "DC_VOLTAGE_SOURCE":
         return (
           <g>
-            {/* Battery / DC source: positive (long plate), negative (short plate) */}
-            <line x1="-20" y1="0" x2="-4" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-4" y1="-12" x2="-4" y2="12" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
-            <line x1="4" y1="-6" x2="4" y2="6" stroke={strokeColor} strokeWidth={strokeWidth + 2} />
-            <line x1="4" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-20" x2="0" y2="-4" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-12" y1="-4" x2="12" y2="-4" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
+            <line x1="-6" y1="4" x2="6" y2="4" stroke={strokeColor} strokeWidth={strokeWidth + 2} />
+            <line x1="0" y1="4" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
             <text x="-14" y="-8" fontSize="10" fill="#cc0000" fontWeight="bold">+</text>
-            <text x="10" y="-8" fontSize="10" fill="#0000cc" fontWeight="bold">-</text>
+            <text x="-14" y="14" fontSize="10" fill="#0000cc" fontWeight="bold">-</text>
           </g>
         );
 
@@ -93,9 +137,8 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
         return (
           <g>
             <circle cx="0" cy="0" r="14" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="0" x2="-14" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="14" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Sine wave ~ */}
+            <line x1="0" y1="-20" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path d="M -8 0 Q -4 -7 0 0 Q 4 7 8 0" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
@@ -104,11 +147,20 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
         return (
           <g>
             <circle cx="0" cy="0" r="14" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="0" x2="-14" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="14" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Arrow pointing right */}
-            <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <polyline points="2,-4 6,0 2,4" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-20" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-6" x2="0" y2="6" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-4,2 0,6 4,2" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "PULSE_VOLTAGE_SOURCE":
+        return (
+          <g>
+            <circle cx="0" cy="0" r="14" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-20" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-8,4 -8,-4 0,-4 0,4 8,4 8,-4" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
@@ -127,39 +179,39 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
           <g>
             <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="-8,-8 8,0 -8,8" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Zener cathode bent line */}
             <path d="M 5 -8 L 8 -8 L 8 8 L 11 8" fill="none" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
             <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
-      case "LED":
+      case "LED": {
+        const vA = pinVoltages?.[`${component.id}:anode`];
+        const vK = pinVoltages?.[`${component.id}:cathode`];
+        const isLedLit = vA !== undefined && vK !== undefined && vA - vK > 1.5;
+        const ledFill = isLedLit ? "#ff3333" : "#ffffff";
         return (
           <g>
+            {isLedLit && <circle cx="0" cy="0" r="16" fill="#ff0000" opacity="0.3" />}
             <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <polygon points="-8,-8 8,0 -8,8" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polygon points="-8,-8 8,0 -8,8" fill={ledFill} stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="-8" x2="8" y2="8" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
             <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Light emission arrows */}
             <line x1="-2" y1="-10" x2="4" y2="-16" stroke="#ff8800" strokeWidth="1.5" />
             <polyline points="1,-16 4,-16 4,-13" fill="none" stroke="#ff8800" strokeWidth="1.5" />
             <line x1="4" y1="-7" x2="10" y2="-13" stroke="#ff8800" strokeWidth="1.5" />
             <polyline points="7,-13 10,-13 10,-10" fill="none" stroke="#ff8800" strokeWidth="1.5" />
           </g>
         );
+      }
 
       case "BJT_NPN":
         return (
           <g>
             <circle cx="0" cy="0" r="16" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Base bar */}
             <line x1="-6" y1="-10" x2="-6" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
-            {/* Base lead */}
             <line x1="-20" y1="0" x2="-6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Collector */}
             <line x1="-6" y1="-5" x2="8" y2="-12" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="-12" x2="8" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Emitter with arrow pointing OUT */}
             <line x1="-6" y1="5" x2="8" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="12" x2="8" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="7,10 8,14 4,13" fill={strokeColor} />
@@ -172,15 +224,231 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
             <circle cx="0" cy="0" r="16" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="-10" x2="-6" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
             <line x1="-20" y1="0" x2="-6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Collector */}
             <line x1="-6" y1="-5" x2="8" y2="-12" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="-12" x2="8" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Emitter with arrow pointing IN */}
             <line x1="-6" y1="5" x2="8" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="12" x2="8" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="-4,5 -1,8 -5,9" fill={strokeColor} />
           </g>
         );
+
+      case "NMOS":
+      case "PMOS": {
+        const isPMOS = type === "PMOS";
+        return (
+          <g>
+            <circle cx="0" cy="0" r="16" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Gate */}
+            <line x1="-20" y1="0" x2="-10" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-10" y1="-10" x2="-10" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
+            {/* Channel segments */}
+            <line x1="-6" y1="-10" x2="-6" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
+            {/* Drain */}
+            <line x1="-6" y1="-7" x2="8" y2="-7" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="-7" x2="8" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Source */}
+            <line x1="-6" y1="7" x2="8" y2="7" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="7" x2="8" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Arrow */}
+            {isPMOS ? (
+              <polygon points="-2,7 2,4 2,10" fill={strokeColor} />
+            ) : (
+              <polygon points="2,7 -2,4 -2,10" fill={strokeColor} />
+            )}
+          </g>
+        );
+      }
+
+      case "OPAMP":
+      case "OPAMP_IDEAL":
+      case "OPAMP_741":
+        return (
+          <g>
+            {/* Inputs: (-20, -10) and (-20, 10) */}
+            <line x1="-20" y1="-10" x2="-12" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-12" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Triangle body */}
+            <polygon
+              points="-12,-18 16,0 -12,18"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            {/* Output */}
+            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* +/- marks */}
+            <text x="-9" y="-7" fontSize="9" fontWeight="bold" fill="#000">-</text>
+            <text x="-9" y="13" fontSize="9" fontWeight="bold" fill="#000">+</text>
+            {/* 741 supply pins if applicable */}
+            {type === "OPAMP_741" && (
+              <>
+                <line x1="0" y1="-20" x2="0" y2="-9" stroke={strokeColor} strokeWidth={strokeWidth} />
+                <line x1="0" y1="9" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+                <text x="3" y="-12" fontSize="7" fill="#888">V+</text>
+                <text x="3" y="17" fontSize="7" fill="#888">V-</text>
+              </>
+            )}
+          </g>
+        );
+
+      case "TIMER_555":
+        return (
+          <g>
+            <rect x="-20" y="-20" width="40" height="40" rx="2" fill="#dcdcdc" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <circle cx="0" cy="-18" r="2.5" fill="#888" />
+            <text x="0" y="2" fontSize="9" fontWeight="bold" fill="#000" textAnchor="middle">NE555</text>
+            {/* Pin leads */}
+            <line x1="-20" y1="-10" x2="-26" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="0" x2="-26" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-26" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="20" y1="-10" x2="26" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="20" y1="0" x2="26" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="20" y1="10" x2="26" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "AND_GATE":
+        return (
+          <g>
+            <line x1="-20" y1="-10" x2="-10" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-10" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <path
+              d="M -10 -16 L 2 -16 A 16 16 0 0 1 2 16 L -10 16 Z"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "NAND_GATE":
+        return (
+          <g>
+            <line x1="-20" y1="-10" x2="-10" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-10" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <path
+              d="M -10 -16 L 0 -16 A 16 16 0 0 1 0 16 L -10 16 Z"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            <circle cx="16" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="18.5" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "OR_GATE":
+        return (
+          <g>
+            <line x1="-20" y1="-10" x2="-8" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-8" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <path
+              d="M -12 -16 Q -2 -14 16 0 Q -2 14 -12 16 Q -6 0 -12 -16 Z"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "NOR_GATE":
+        return (
+          <g>
+            <line x1="-20" y1="-10" x2="-8" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-8" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <path
+              d="M -12 -16 Q -4 -14 13 0 Q -4 14 -12 16 Q -6 0 -12 -16 Z"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            <circle cx="16" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="18.5" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "NOT_GATE":
+        return (
+          <g>
+            <line x1="-20" y1="0" x2="-10" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polygon
+              points="-10,-12 10,0 -10,12"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            <circle cx="13" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="15.5" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "XOR_GATE":
+        return (
+          <g>
+            <line x1="-20" y1="-10" x2="-12" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-20" y1="10" x2="-12" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <path d="M -16 -16 Q -10 0 -16 16" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <path
+              d="M -12 -16 Q -2 -14 16 0 Q -2 14 -12 16 Q -6 0 -12 -16 Z"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+
+      case "BULB": {
+        const v1 = pinVoltages?.[`${component.id}:1`];
+        const v2 = pinVoltages?.[`${component.id}:2`];
+        const diff = v1 !== undefined && v2 !== undefined ? Math.abs(v1 - v2) : 0;
+        const glowOpacity = Math.min(1.0, Math.max(0, (diff - 0.5) / 10.0));
+        return (
+          <g>
+            <line x1="-20" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {glowOpacity > 0 && (
+              <circle cx="0" cy="0" r={16 + glowOpacity * 8} fill="#ffdd00" opacity={glowOpacity * 0.5} />
+            )}
+            <circle
+              cx="0"
+              cy="0"
+              r="12"
+              fill={glowOpacity > 0 ? "#ffffaa" : "#ffffff"}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            {/* Filament */}
+            <path d="M -5 -5 L 5 5 M -5 5 L 5 -5" stroke={glowOpacity > 0 ? "#ff6600" : strokeColor} strokeWidth="1.5" />
+            <line x1="12" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          </g>
+        );
+      }
+
+      case "SEVEN_SEGMENT": {
+        const isSegOn = (s: string) => (pinVoltages?.[`${component.id}:${s}`] ?? 0) > 2.0;
+        const segColor = (s: string) => (isSegOn(s) ? "#ff2020" : "#2a0505");
+        return (
+          <g>
+            <rect x="-16" y="-24" width="32" height="48" rx="2" fill="#111111" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* a: top */}
+            <rect x="-8" y="-18" width="16" height="3" rx="1" fill={segColor("a")} />
+            {/* b: top-right */}
+            <rect x="7" y="-16" width="3" height="13" rx="1" fill={segColor("b")} />
+            {/* c: bottom-right */}
+            <rect x="7" y="1" width="3" height="13" rx="1" fill={segColor("c")} />
+            {/* d: bottom */}
+            <rect x="-8" y="13" width="16" height="3" rx="1" fill={segColor("d")} />
+            {/* e: bottom-left */}
+            <rect x="-10" y="1" width="3" height="13" rx="1" fill={segColor("e")} />
+            {/* f: top-left */}
+            <rect x="-10" y="-16" width="3" height="13" rx="1" fill={segColor("f")} />
+            {/* g: middle */}
+            <rect x="-8" y="-2" width="16" height="3" rx="1" fill={segColor("g")} />
+          </g>
+        );
+      }
 
       case "MULTIMETER":
       case "OSCILLOSCOPE":
@@ -193,7 +461,6 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
             <text x="0" y="-2" fontSize="8" fill="#00ff00" fontFamily="monospace" textAnchor="middle">
               {type === "MULTIMETER" ? "DMM" : type === "OSCILLOSCOPE" ? "SCOPE" : type === "BODE_PLOTTER" ? "BODE" : "GEN"}
             </text>
-            {/* Terminals */}
             <circle cx="-12" cy="10" r="3" fill="#cc0000" stroke="#000" strokeWidth="0.5" />
             <circle cx="12" cy="10" r="3" fill="#000000" stroke="#000" strokeWidth="0.5" />
           </g>
@@ -203,13 +470,12 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
         return (
           <g>
             <rect x="-16" y="-12" width="32" height="24" fill="#f0f0f0" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <text x="0" y="4" fontSize="8" textAnchor="middle" fill={strokeColor}>{type.substring(0, 4)}</text>
+            <text x="0" y="4" fontSize="8" textAnchor="middle" fill={strokeColor}>{(type as string).substring(0, 4)}</text>
           </g>
         );
     }
   };
 
-  // Determine parameter label text to display below component
   const getParamLabel = () => {
     if (!params) return "";
     if (params["resistance"]) return params["resistance"];
@@ -218,6 +484,8 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
     if (params["voltage"]) return params["voltage"];
     if (params["current"]) return params["current"];
     if (params["model"]) return params["model"];
+    if (params["percent"]) return `${params["percent"]}%`;
+    if (params["state"]) return params["state"].toUpperCase();
     return "";
   };
 
@@ -229,7 +497,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
       {/* Component ID and Label */}
       <text
         x="0"
-        y="-16"
+        y="-18"
         fontSize="10"
         fontWeight="bold"
         textAnchor="middle"
@@ -241,7 +509,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({ component, isS
       {paramLabel && (
         <text
           x="0"
-          y="22"
+          y="24"
           fontSize="9"
           textAnchor="middle"
           fill="#333333"

@@ -18,6 +18,7 @@ const api: SpicebenchApi = {
   saveProject: () => ipcRenderer.invoke("spicebench:save-project"),
   openProject: () => ipcRenderer.invoke("spicebench:open-project"),
   exportNetlist: () => ipcRenderer.invoke("spicebench:export-netlist"),
+  importNetlist: (rawNetlist) => ipcRenderer.invoke("spicebench:import-netlist", rawNetlist),
   undo: () => ipcRenderer.invoke("spicebench:undo"),
   redo: () => ipcRenderer.invoke("spicebench:redo"),
   canUndo: () => ipcRenderer.invoke("spicebench:can-undo"),

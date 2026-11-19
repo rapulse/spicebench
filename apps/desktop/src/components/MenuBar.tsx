@@ -5,7 +5,10 @@ interface MenuBarProps {
   onOpen?: () => void;
   onSave?: () => void;
   onExportNetlist?: () => void;
-  onOpenSample: (sample: "voltage-divider" | "rc-step" | "rlc-filter") => void;
+  onImportNetlist?: () => void;
+  onOpenSample: (
+    sample: "voltage-divider" | "rc-step" | "rlc-filter" | "interactive-logic"
+  ) => void;
   onValidate: () => void;
   onSimulate: () => void;
   onRotate?: () => void;
@@ -21,6 +24,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onOpen,
   onSave,
   onExportNetlist,
+  onImportNetlist,
   onOpenSample,
   onValidate,
   onSimulate,
@@ -64,6 +68,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div className="ewb-dropdown-item" onClick={() => { onExportNetlist?.(); closeMenu(); }}>
               <span>Export SPICE Netlist (.cir)...</span>
             </div>
+            <div className="ewb-dropdown-item" onClick={() => { onImportNetlist?.(); closeMenu(); }}>
+              <span>Import SPICE Netlist (.cir)...</span>
+            </div>
             <div className="ewb-dropdown-divider" />
             <div className="ewb-dropdown-item" onClick={() => { onOpenSample("voltage-divider"); closeMenu(); }}>
               <span>Sample: Voltage Divider</span>
@@ -73,6 +80,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </div>
             <div className="ewb-dropdown-item" onClick={() => { onOpenSample("rlc-filter"); closeMenu(); }}>
               <span>Sample: RLC Resonance</span>
+            </div>
+            <div className="ewb-dropdown-item" onClick={() => { onOpenSample("interactive-logic"); closeMenu(); }}>
+              <span>Sample: Digital Logic &amp; Bulb</span>
             </div>
           </div>
         )}

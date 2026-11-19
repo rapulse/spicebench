@@ -53,13 +53,16 @@ export interface SpicebenchApi {
   saveProject: () => Promise<{ filePath: string; name: string } | null>;
   openProject: () => Promise<{ filePath: string; circuit: CircuitProject; name: string } | null>;
   exportNetlist: () => Promise<{ filePath: string; name: string } | null>;
+  importNetlist: (rawNetlist?: string) => Promise<{ name: string; circuit: CircuitProject; warnings: string[] } | null>;
   undo: () => Promise<boolean>;
   redo: () => Promise<boolean>;
   canUndo: () => Promise<boolean>;
   canRedo: () => Promise<boolean>;
   updateInstrument: (state: InstrumentState) => Promise<void>;
   readInstrument: (instrumentId: string) => Promise<InstrumentReading>;
-  loadSampleCircuit: (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => Promise<CircuitProject>;
+  loadSampleCircuit: (
+    sampleName: "voltage-divider" | "rc-step" | "rlc-filter" | "interactive-logic"
+  ) => Promise<CircuitProject>;
   getMcpStatus: () => Promise<McpServerStatus>;
   toggleMcpServer: (enable: boolean, port?: number) => Promise<McpServerStatus>;
   getMcpClientConfigs: () => Promise<McpClientConfigMap>;

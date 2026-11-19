@@ -187,4 +187,47 @@ describe("NetlistCompiler (Graph -> SPICE Netlist Translation)", () => {
     // Ammeter -> 0V current sensing source
     expect(compiled.netlist).toMatch(/V_XMM2_sense \S+ \S+ 0V/);
   });
+
+  it("compiles MOSFETs (NMOS/PMOS) with proper pin order and models", () => {
+    const graph = new CircuitGraph();
+    const m1 = createDefaultComponent("NMOS", "M1", { x: 10, y: 10 });
+    const m2 = createDefaultComponent("PMOS", "M2", { x: 20, y: 10 });
+    const gnd = createDefaultComponent("GROUND", "GND1", { x: 0, y: 0 });
+
+    graph.addComponent(m1);
+    graph.addComponent(m2);
+    graph.addComponent(gnd);
+
+    const compiled = NetlistCompiler.compile(graph, { mode: "op" });
+    expect(compiled.netlist).toMatch(/M_M1 \S+ \S+ \S+ \S+ 2N7000/);
+    expect(compiled.netlist).toMatch(/M_M2 \S+ \S+ \S+ \S+ BS250/);
+    expect(compiled.netlist).toContain(".model 2N7000 NMOS(");
+    expect(compiled.netlist).toContain(".model BS250 PMOS(");
+  });
+
+  it("compiles Op-Amps, 555 Timer, and Logic Gates with subcircuits", () => {
+    const graph = new CircuitGraph();
+    const u1 = createDefaultComponent("OPAMP_IDEAL", "U1", { x: 10, y: 10 });
+    const u2 = createDefaultComponent("TIMER_555", "U2", { x: 20, y: 10 });
+    const u3 = createDefaultComponent("AND_GATE", "U3", { x: 30, y: 10 });
+    const gnd = createDefaultComponent("GROUND", "GND1", { x: 0, y: 0 });
+
+    graph.addComponent(u1);
+    graph.addComponent(u2);
+    graph.addComponent(u3);
+    graph.addComponent(gnd);
+
+    const compiled = NetlistCompiler.compile(graph, { mode: "op" });
+    expect(compiled.netlist).toContain("X_U1");
+    expect(compiled.netlist).toContain("OPAMP_IDEAL");
+    expect(compiled.netlist).toContain(".subckt OPAMP_IDEAL");
+
+    expect(compiled.netlist).toContain("X_U2");
+    expect(compiled.netlist).toContain("TIMER_555");
+    expect(compiled.netlist).toContain(".subckt TIMER_555");
+
+    expect(compiled.netlist).toContain("X_U3");
+    expect(compiled.netlist).toContain("GATE_AND");
+    expect(compiled.netlist).toContain(".subckt GATE_AND");
+  });
 });

@@ -5,7 +5,7 @@ import {
   parseEngineeringValue,
   Component,
 } from "@spicebench/core";
-import { getModelDefinition } from "./models";
+import { getModelDefinition, getSubcircuitDefinition } from "./models";
 import { SimulationMode } from "../parser/types";
 
 export interface TranOptions {
@@ -75,6 +75,7 @@ export class NetlistCompiler {
 
     const lines: string[] = [];
     const usedModels = new Set<string>();
+    const usedSubcircuits = new Set<string>();
 
     // 1. Title line (CRITICAL: line 1 in SPICE is always comment/title)
     const circuitName = graph.meta.name || "SpiceBench Circuit";
@@ -84,7 +85,7 @@ export class NetlistCompiler {
 
     // 2. Translate Components
     for (const comp of graph.getAllComponents()) {
-      const compLines = NetlistCompiler.translateComponent(comp, getNode, usedModels);
+      const compLines = NetlistCompiler.translateComponent(comp, getNode, usedModels, usedSubcircuits);
       if (compLines.length > 0) {
         lines.push(...compLines);
       }
@@ -104,7 +105,19 @@ export class NetlistCompiler {
       lines.push("");
     }
 
-    // 4. Determine and include analysis directive (.op, .tran, .ac, .dc)
+    // 4. Include .subckt definitions
+    if (usedSubcircuits.size > 0) {
+      lines.push("* --- Subcircuits & IC Models ---");
+      for (const subckt of usedSubcircuits) {
+        const def = getSubcircuitDefinition(subckt);
+        if (def) {
+          lines.push(def);
+          lines.push("");
+        }
+      }
+    }
+
+    // 5. Determine and include analysis directive (.op, .tran, .ac, .dc)
     const mode = options.mode ?? NetlistCompiler.detectSimulationMode(graph);
     const analysisDirective = NetlistCompiler.buildAnalysisDirective(mode, options, graph);
 
@@ -127,6 +140,7 @@ export class NetlistCompiler {
     comp: Component,
     getNode: (comp: string, pin: string) => string,
     usedModels: Set<string>,
+    usedSubcircuits: Set<string>,
   ): string[] {
     const lines: string[] = [];
 
@@ -255,6 +269,134 @@ export class NetlistCompiler {
         const model = comp.params["model"] || "2N3906";
         usedModels.add(model);
         lines.push(`Q_${comp.id} ${nC} ${nB} ${nE} ${model}`);
+        break;
+      }
+
+      case "NMOS": {
+        const nD = getNode(comp.id, "drain");
+        const nG = getNode(comp.id, "gate");
+        const nS = getNode(comp.id, "source");
+        const model = comp.params["model"] || "2N7000";
+        usedModels.add(model);
+        lines.push(`M_${comp.id} ${nD} ${nG} ${nS} ${nS} ${model}`);
+        break;
+      }
+
+      case "PMOS": {
+        const nD = getNode(comp.id, "drain");
+        const nG = getNode(comp.id, "gate");
+        const nS = getNode(comp.id, "source");
+        const model = comp.params["model"] || "BS250";
+        usedModels.add(model);
+        lines.push(`M_${comp.id} ${nD} ${nG} ${nS} ${nS} ${model}`);
+        break;
+      }
+
+      case "OPAMP":
+      case "OPAMP_741": {
+        const nInv = getNode(comp.id, "inv");
+        const nNonInv = getNode(comp.id, "non_inv");
+        const nVPos = getNode(comp.id, "v_pos");
+        const nVNeg = getNode(comp.id, "v_neg");
+        const nOut = getNode(comp.id, "out");
+        usedSubcircuits.add("LM741");
+        lines.push(`X_${comp.id} ${nInv} ${nNonInv} ${nVPos} ${nVNeg} ${nOut} LM741`);
+        break;
+      }
+
+      case "OPAMP_IDEAL": {
+        const nInv = getNode(comp.id, "inv");
+        const nNonInv = getNode(comp.id, "non_inv");
+        const nOut = getNode(comp.id, "out");
+        usedSubcircuits.add("OPAMP_IDEAL");
+        lines.push(`X_${comp.id} ${nInv} ${nNonInv} ${nOut} OPAMP_IDEAL`);
+        break;
+      }
+
+      case "TIMER_555": {
+        const nGnd = getNode(comp.id, "gnd");
+        const nTrig = getNode(comp.id, "trig");
+        const nOut = getNode(comp.id, "out");
+        const nReset = getNode(comp.id, "reset");
+        const nCtrl = getNode(comp.id, "ctrl");
+        const nThresh = getNode(comp.id, "thresh");
+        const nDisch = getNode(comp.id, "disch");
+        const nVcc = getNode(comp.id, "vcc");
+        usedSubcircuits.add("TIMER_555");
+        usedModels.add("2N3904");
+        lines.push(
+          `X_${comp.id} ${nGnd} ${nTrig} ${nOut} ${nReset} ${nCtrl} ${nThresh} ${nDisch} ${nVcc} TIMER_555`,
+        );
+        break;
+      }
+
+      case "AND_GATE": {
+        const in1 = getNode(comp.id, "in1");
+        const in2 = getNode(comp.id, "in2");
+        const out = getNode(comp.id, "out");
+        usedSubcircuits.add("GATE_AND");
+        lines.push(`X_${comp.id} ${in1} ${in2} ${out} GATE_AND`);
+        break;
+      }
+
+      case "OR_GATE": {
+        const in1 = getNode(comp.id, "in1");
+        const in2 = getNode(comp.id, "in2");
+        const out = getNode(comp.id, "out");
+        usedSubcircuits.add("GATE_OR");
+        lines.push(`X_${comp.id} ${in1} ${in2} ${out} GATE_OR`);
+        break;
+      }
+
+      case "NOT_GATE": {
+        const inp = getNode(comp.id, "in");
+        const out = getNode(comp.id, "out");
+        usedSubcircuits.add("GATE_NOT");
+        lines.push(`X_${comp.id} ${inp} ${out} GATE_NOT`);
+        break;
+      }
+
+      case "NAND_GATE": {
+        const in1 = getNode(comp.id, "in1");
+        const in2 = getNode(comp.id, "in2");
+        const out = getNode(comp.id, "out");
+        usedSubcircuits.add("GATE_NAND");
+        lines.push(`X_${comp.id} ${in1} ${in2} ${out} GATE_NAND`);
+        break;
+      }
+
+      case "NOR_GATE": {
+        const in1 = getNode(comp.id, "in1");
+        const in2 = getNode(comp.id, "in2");
+        const out = getNode(comp.id, "out");
+        usedSubcircuits.add("GATE_NOR");
+        lines.push(`X_${comp.id} ${in1} ${in2} ${out} GATE_NOR`);
+        break;
+      }
+
+      case "XOR_GATE": {
+        const in1 = getNode(comp.id, "in1");
+        const in2 = getNode(comp.id, "in2");
+        const out = getNode(comp.id, "out");
+        usedSubcircuits.add("GATE_XOR");
+        lines.push(`X_${comp.id} ${in1} ${in2} ${out} GATE_XOR`);
+        break;
+      }
+
+      case "BULB": {
+        const n1 = getNode(comp.id, "1");
+        const n2 = getNode(comp.id, "2");
+        const rVal = parseEngineeringValue(comp.params["resistance"] ?? "100").spiceValue;
+        lines.push(`R_${comp.id} ${n1} ${n2} ${rVal}`);
+        break;
+      }
+
+      case "SEVEN_SEGMENT": {
+        const com = getNode(comp.id, "com");
+        for (const seg of ["a", "b", "c", "d", "e", "f", "g"]) {
+          const pinNode = getNode(comp.id, seg);
+          lines.push(`R_${comp.id}_${seg} ${pinNode} ${com} 100k`);
+        }
         break;
       }
 

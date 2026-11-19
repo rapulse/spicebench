@@ -11,7 +11,7 @@ import {
   type HttpSseServerInstance,
 } from "@spicebench/mcp";
 import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
-import { NetlistCompiler } from "@spicebench/sim";
+import { NetlistCompiler, SpiceImporter } from "@spicebench/sim";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -149,7 +149,9 @@ session.onAgentAction((action) => {
   broadcastMcpStatus();
 });
 
-function loadSample(name: "voltage-divider" | "rc-step" | "rlc-filter") {
+function loadSample(
+  name: "voltage-divider" | "rc-step" | "rlc-filter" | "interactive-logic"
+) {
   session.reset();
 
   if (name === "voltage-divider") {
@@ -210,6 +212,20 @@ function loadSample(name: "voltage-divider" | "rc-step" | "rlc-filter") {
     session.connectPins({ from: { componentId: "R1", pinId: "2" }, to: { componentId: "L1", pinId: "1" } });
     session.connectPins({ from: { componentId: "L1", pinId: "2" }, to: { componentId: "C1", pinId: "1" } });
     session.connectPins({ from: { componentId: "C1", pinId: "2" }, to: { componentId: "GND1", pinId: "0" } });
+    session.connectPins({ from: { componentId: "V1", pinId: "neg" }, to: { componentId: "GND1", pinId: "0" } });
+  } else if (name === "interactive-logic") {
+    session.placeComponent({ type: "DC_VOLTAGE_SOURCE", id: "V1", params: { voltage: "5V" }, x: 10, y: 10 });
+    session.placeComponent({ type: "SWITCH_SPST", id: "SW1", params: { state: "closed" }, x: 20, y: 10 });
+    session.placeComponent({ type: "AND_GATE", id: "U1", x: 32, y: 10 });
+    session.placeComponent({ type: "BULB", id: "L1", params: { voltage: "5V", resistance: "50" }, x: 44, y: 10 });
+    session.placeComponent({ type: "GROUND", id: "GND1", x: 10, y: 22 });
+    session.placeComponent({ type: "GROUND", id: "GND2", x: 44, y: 22 });
+
+    session.connectPins({ from: { componentId: "V1", pinId: "pos" }, to: { componentId: "SW1", pinId: "1" } });
+    session.connectPins({ from: { componentId: "SW1", pinId: "2" }, to: { componentId: "U1", pinId: "in1" } });
+    session.connectPins({ from: { componentId: "SW1", pinId: "2" }, to: { componentId: "U1", pinId: "in2" } });
+    session.connectPins({ from: { componentId: "U1", pinId: "out" }, to: { componentId: "L1", pinId: "1" } });
+    session.connectPins({ from: { componentId: "L1", pinId: "2" }, to: { componentId: "GND2", pinId: "0" } });
     session.connectPins({ from: { componentId: "V1", pinId: "neg" }, to: { componentId: "GND1", pinId: "0" } });
   }
 
@@ -342,6 +358,34 @@ function registerIpcHandlers() {
     return { filePath, name: path.basename(filePath) };
   });
 
+  ipcMain.handle("spicebench:import-netlist", async (_e, rawText?: string) => {
+    let content = rawText;
+    let fileName = "imported.cir";
+    if (!content) {
+      if (!mainWindow) return null;
+      const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+        title: "Import SPICE Netlist",
+        filters: [
+          {
+            name: "SPICE Netlist (*.cir, *.net, *.sp, *.txt)",
+            extensions: ["cir", "net", "sp", "txt"],
+          },
+          { name: "All Files (*.*)", extensions: ["*"] },
+        ],
+        properties: ["openFile"],
+      });
+      if (canceled || filePaths.length === 0 || !filePaths[0]) return null;
+      const filePath = filePaths[0];
+      content = await fs.readFile(filePath, "utf-8");
+      fileName = path.basename(filePath);
+    }
+    const result = SpiceImporter.importNetlist(content, fileName);
+    session.loadCircuit(result.project);
+    broadcastCircuitUpdate();
+    broadcastSimulationUpdate(null);
+    return { name: fileName, circuit: result.project, warnings: result.warnings };
+  });
+
   ipcMain.handle("spicebench:update-instrument", (_e, state) => {
     session.updateInstrument(state);
     broadcastCircuitUpdate();
@@ -385,7 +429,12 @@ function createWindow() {
   });
 
   // Default initial sample circuit
-  const initialSample = (process.env["SPICEBENCH_SAMPLE"] as "voltage-divider" | "rc-step" | "rlc-filter") || "voltage-divider";
+  const initialSample =
+    (process.env["SPICEBENCH_SAMPLE"] as
+      | "voltage-divider"
+      | "rc-step"
+      | "rlc-filter"
+      | "interactive-logic") || "voltage-divider";
   loadSample(initialSample);
 
   if (process.env["VITE_DEV_SERVER_URL"]) {

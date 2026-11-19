@@ -251,4 +251,43 @@ R_FAULT N001 0
       expect(msg).toMatch(/syntax error|problematic/i);
     }
   });
+
+  it("Fixture 5: Digital Logic Gate & Op-Amp Macromodels Simulation", async () => {
+    runner = new SpiceRunner({ useWorkerThread: false });
+
+    const graph = new CircuitGraph();
+    const v1 = createDefaultComponent("DC_VOLTAGE_SOURCE", "V1", { x: 10, y: 10 });
+    v1.params["voltage"] = "5V";
+
+    const andGate = createDefaultComponent("AND_GATE", "U1", { x: 20, y: 10 });
+    const notGate = createDefaultComponent("NOT_GATE", "U2", { x: 30, y: 10 });
+    const gnd = createDefaultComponent("GROUND", "GND1", { x: 10, y: 20 });
+
+    graph.addComponent(v1);
+    graph.addComponent(andGate);
+    graph.addComponent(notGate);
+    graph.addComponent(gnd);
+
+    // V1.pos -> andGate.in1 & andGate.in2
+    graph.connectPins({ componentId: "V1", pinId: "pos" }, { componentId: "U1", pinId: "in1" });
+    graph.connectPins({ componentId: "V1", pinId: "pos" }, { componentId: "U1", pinId: "in2" });
+    // andGate.out -> notGate.in
+    graph.connectPins({ componentId: "U1", pinId: "out" }, { componentId: "U2", pinId: "in" });
+    // V1.neg -> GND.0
+    graph.connectPins({ componentId: "V1", pinId: "neg" }, { componentId: "GND1", pinId: "0" });
+
+    const compiled = NetlistCompiler.compile(graph, { mode: "op" });
+    const result = await runner.run(compiled.netlist);
+
+    expect(result.success).toBe(true);
+    const op = result.data as OpResult;
+
+    // AND gate output should be HIGH (5.0V)
+    const andOutNode = compiled.nodeMap.get("U1:out")!.toLowerCase();
+    expect(op.nodeVoltages[andOutNode]).toBeCloseTo(5.0, 1);
+
+    // Inverter (NOT gate) output should be LOW (0.0V)
+    const notOutNode = compiled.nodeMap.get("U2:out")!.toLowerCase();
+    expect(op.nodeVoltages[notOutNode]).toBeCloseTo(0.0, 1);
+  });
 });
