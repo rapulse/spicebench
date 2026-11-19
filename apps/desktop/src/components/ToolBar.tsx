@@ -4,6 +4,8 @@ interface ToolBarProps {
   powerOn: boolean;
   onTogglePower: () => void;
   onNew: () => void;
+  onOpen?: () => void;
+  onSave?: () => void;
   onValidate: () => void;
   onSimulate: () => void;
   onRotate?: () => void;
@@ -18,6 +20,8 @@ export const ToolBar: React.FC<ToolBarProps> = ({
   powerOn,
   onTogglePower,
   onNew,
+  onOpen,
+  onSave,
   onValidate,
   onSimulate,
   onRotate,
@@ -31,13 +35,13 @@ export const ToolBar: React.FC<ToolBarProps> = ({
     <div className="ewb-toolbar">
       {/* Left group: file and edit buttons */}
       <div className="ewb-tool-group">
-        <button className="ewb-tool-btn" title="New Circuit" onClick={onNew}>
+        <button className="ewb-tool-btn" title="New Circuit (Ctrl+N)" onClick={onNew}>
           📄
         </button>
-        <button className="ewb-tool-btn" title="Open...">
+        <button className="ewb-tool-btn" title="Open Project... (Ctrl+O)" onClick={onOpen}>
           📁
         </button>
-        <button className="ewb-tool-btn" title="Save">
+        <button className="ewb-tool-btn" title="Save Project (Ctrl+S)" onClick={onSave}>
           💾
         </button>
 

@@ -32,6 +32,9 @@ export interface SpicebenchApi {
   runSimulation: (options?: SimulationRunOptions) => Promise<SimulationSummary>;
   setPower: (powerOn: boolean) => Promise<SimulationSummary | null>;
   resetCircuit: () => Promise<void>;
+  saveProject: () => Promise<{ filePath: string; name: string } | null>;
+  openProject: () => Promise<{ filePath: string; circuit: CircuitProject; name: string } | null>;
+  exportNetlist: () => Promise<{ filePath: string; name: string } | null>;
   undo: () => Promise<boolean>;
   redo: () => Promise<boolean>;
   canUndo: () => Promise<boolean>;

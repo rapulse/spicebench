@@ -6,6 +6,9 @@ import { SchematicSymbol } from "../src/components/SchematicSymbol";
 import { Canvas, findNearestPointOnWire } from "../src/components/Canvas";
 import { ComponentDialog } from "../src/components/ComponentDialog";
 import type { Component, ComponentType, CircuitProject, Wire } from "@spicebench/core";
+import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
+import { CircuitSession } from "@spicebench/mcp";
+import { NetlistCompiler } from "@spicebench/sim";
 import type { SpicebenchApi } from "../src/types/ipc";
 
 describe("Desktop Package", () => {
@@ -259,6 +262,9 @@ describe("Desktop Package", () => {
         }),
         setPower: async () => null,
         resetCircuit: async () => {},
+        saveProject: async () => ({ filePath: "/tmp/test.ewb.json", name: "test.ewb.json" }),
+        openProject: async () => null,
+        exportNetlist: async () => ({ filePath: "/tmp/test.cir", name: "test.cir" }),
         undo: async () => true,
         redo: async () => true,
         canUndo: async () => true,
@@ -279,6 +285,9 @@ describe("Desktop Package", () => {
       expect(typeof mockApi.placeComponent).toBe("function");
       expect(typeof mockApi.runSimulation).toBe("function");
       expect(typeof mockApi.setPower).toBe("function");
+      expect(typeof mockApi.saveProject).toBe("function");
+      expect(typeof mockApi.openProject).toBe("function");
+      expect(typeof mockApi.exportNetlist).toBe("function");
       expect(typeof mockApi.undo).toBe("function");
       expect(typeof mockApi.redo).toBe("function");
       expect(typeof mockApi.canUndo).toBe("function");
@@ -336,6 +345,89 @@ describe("Desktop Package", () => {
       );
 
       expect(markup).toBe("");
+    });
+  });
+
+  describe("File Operations & Netlist Export (Phase 5.4)", () => {
+    it("serializes and deserializes a circuit project without losing geometry or parameters", () => {
+      const original: CircuitProject = {
+        schemaVersion: 1,
+        meta: { name: "RC Filter", createdAt: "2026-01-01T00:00:00Z" },
+        components: [
+          {
+            id: "R1",
+            type: "RESISTOR",
+            label: "R1",
+            position: { x: 10, y: 15 },
+            rotation: 90,
+            params: { resistance: "4.7k" },
+          },
+          {
+            id: "C1",
+            type: "CAPACITOR",
+            label: "C1",
+            position: { x: 20, y: 15 },
+            rotation: 0,
+            params: { capacitance: "100nF" },
+          },
+        ],
+        wires: [
+          {
+            id: "W1",
+            from: { componentId: "R1", pinId: "2" },
+            to: { componentId: "C1", pinId: "1" },
+            points: [
+              { x: 10, y: 17 },
+              { x: 18, y: 17 },
+              { x: 18, y: 15 },
+            ],
+          },
+        ],
+        junctions: [],
+        instruments: [],
+      };
+
+      const jsonStr = serializeCircuitProject(original);
+      expect(jsonStr).toContain('"name": "RC Filter"');
+      expect(jsonStr).toContain('"resistance": "4.7k"');
+
+      const loaded = parseCircuitProject(JSON.parse(jsonStr));
+      expect(loaded.components).toHaveLength(2);
+      expect(loaded.components[0]?.params["resistance"]).toBe("4.7k");
+      expect(loaded.wires).toHaveLength(1);
+      expect(loaded.wires[0]?.points).toEqual([
+        { x: 10, y: 17 },
+        { x: 18, y: 17 },
+        { x: 18, y: 15 },
+      ]);
+    });
+
+    it("loads project into CircuitSession and compiles valid SPICE netlist", () => {
+      const session = new CircuitSession();
+      session.placeComponent({ type: "DC_VOLTAGE_SOURCE", id: "V1", params: { voltage: "10V" }, x: 10, y: 10 });
+      session.placeComponent({ type: "RESISTOR", id: "R1", params: { resistance: "1k" }, x: 20, y: 10 });
+      session.placeComponent({ type: "GROUND", id: "GND1", x: 10, y: 20 });
+      session.connectPins({ from: { componentId: "V1", pinId: "pos" }, to: { componentId: "R1", pinId: "1" } });
+      session.connectPins({ from: { componentId: "R1", pinId: "2" }, to: { componentId: "GND1", pinId: "0" } });
+      session.connectPins({ from: { componentId: "V1", pinId: "neg" }, to: { componentId: "GND1", pinId: "0" } });
+
+      const compiled = NetlistCompiler.compile(session.getGraph());
+      expect(compiled.netlist).toContain("V1");
+      expect(compiled.netlist).toContain("R1");
+      expect(compiled.netlist).toContain(".end");
+
+      // Now save to JSON and reload into fresh session
+      const exportedProject = session.getCircuit();
+      const newSession = new CircuitSession();
+      newSession.loadCircuit(exportedProject);
+
+      expect(newSession.getCircuit().components).toHaveLength(3);
+      expect(newSession.getCircuit().wires).toHaveLength(3);
+
+      const recompiled = NetlistCompiler.compile(newSession.getGraph());
+      expect(recompiled.netlist).toContain("V1");
+      expect(recompiled.netlist).toContain("R1");
+      expect(recompiled.netlist).toContain(".end");
     });
   });
 });

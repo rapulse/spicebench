@@ -479,6 +479,14 @@ export class CircuitSession {
     this.isDirty = true;
   }
 
+  public loadCircuit(project: CircuitProject): void {
+    this.graph = new CircuitGraph(project);
+    this.commandManager.clear();
+    this.lastCompiled = undefined;
+    this.lastResult = undefined;
+    this.isDirty = true;
+  }
+
   private generateNextComponentId(type: ComponentType): string {
     const meta = COMPONENT_CATALOG[type];
     const prefix = meta?.prefix || "U";

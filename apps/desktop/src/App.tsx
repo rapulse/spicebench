@@ -121,9 +121,55 @@ export const App: React.FC = () => {
       setSelectedIds([]);
       setPowerOn(false);
       setSimulation(null);
+      refreshUndoState();
       setStatusText("New circuit created");
     }
   };
+
+  const handleOpenProject = useCallback(async () => {
+    if (window.spicebenchApi) {
+      try {
+        const res = await window.spicebenchApi.openProject();
+        if (res) {
+          setCircuit(res.circuit);
+          updateStats(res.circuit);
+          setSelectedIds([]);
+          setPowerOn(false);
+          setSimulation(null);
+          refreshUndoState();
+          setStatusText(`Opened: ${res.name}`);
+        }
+      } catch (err) {
+        setStatusText(`Open error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, [refreshUndoState]);
+
+  const handleSaveProject = useCallback(async () => {
+    if (window.spicebenchApi) {
+      try {
+        const res = await window.spicebenchApi.saveProject();
+        if (res) {
+          setStatusText(`Saved: ${res.name}`);
+        }
+      } catch (err) {
+        setStatusText(`Save error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, []);
+
+  const handleExportNetlist = useCallback(async () => {
+    if (window.spicebenchApi) {
+      try {
+        const res = await window.spicebenchApi.exportNetlist();
+        if (res) {
+          setStatusText(`Exported SPICE netlist: ${res.name}`);
+        }
+      } catch (err) {
+        setStatusText(`Export error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, []);
 
   const handleOpenSample = async (sampleName: "voltage-divider" | "rc-step" | "rlc-filter") => {
     if (window.spicebenchApi) {
@@ -355,6 +401,15 @@ export const App: React.FC = () => {
       ) {
         e.preventDefault();
         handleRedo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSaveProject();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        handleOpenProject();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        handleNewCircuit();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         handleRotate();
@@ -372,7 +427,16 @@ export const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo, handleRotate, handleDelete, handleSelectAll]);
+  }, [
+    handleUndo,
+    handleRedo,
+    handleSaveProject,
+    handleOpenProject,
+    handleNewCircuit,
+    handleRotate,
+    handleDelete,
+    handleSelectAll,
+  ]);
 
   return (
     <div className="ewb-window window">
@@ -382,6 +446,9 @@ export const App: React.FC = () => {
       {/* 2. Menu Bar */}
       <MenuBar
         onNew={handleNewCircuit}
+        onOpen={handleOpenProject}
+        onSave={handleSaveProject}
+        onExportNetlist={handleExportNetlist}
         onOpenSample={handleOpenSample}
         onValidate={handleValidate}
         onSimulate={handleSimulate}
@@ -397,6 +464,8 @@ export const App: React.FC = () => {
         powerOn={powerOn}
         onTogglePower={handleTogglePower}
         onNew={handleNewCircuit}
+        onOpen={handleOpenProject}
+        onSave={handleSaveProject}
         onValidate={handleValidate}
         onSimulate={handleSimulate}
         onRotate={handleRotate}

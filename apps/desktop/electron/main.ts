@@ -1,7 +1,10 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CircuitSession, type SimulationSummary } from "@spicebench/mcp";
+import { parseCircuitProject, serializeCircuitProject } from "@spicebench/core";
+import { NetlistCompiler } from "@spicebench/sim";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -132,6 +135,59 @@ function registerIpcHandlers() {
 
   ipcMain.handle("spicebench:can-undo", () => session.canUndo);
   ipcMain.handle("spicebench:can-redo", () => session.canRedo);
+
+  ipcMain.handle("spicebench:save-project", async () => {
+    if (!mainWindow) return null;
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: "Save Circuit Project",
+      defaultPath: "circuit.ewb.json",
+      filters: [
+        { name: "SpiceBench Circuit (*.ewb.json, *.json)", extensions: ["json"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
+      ],
+    });
+    if (canceled || !filePath) return null;
+    const circuit = session.getCircuit();
+    await fs.writeFile(filePath, serializeCircuitProject(circuit), "utf-8");
+    return { filePath, name: path.basename(filePath) };
+  });
+
+  ipcMain.handle("spicebench:open-project", async () => {
+    if (!mainWindow) return null;
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: "Open Circuit Project",
+      filters: [
+        { name: "SpiceBench Circuit (*.ewb.json, *.json)", extensions: ["json"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
+      ],
+      properties: ["openFile"],
+    });
+    if (canceled || filePaths.length === 0 || !filePaths[0]) return null;
+    const filePath = filePaths[0];
+    const content = await fs.readFile(filePath, "utf-8");
+    const parsed = JSON.parse(content);
+    const validated = parseCircuitProject(parsed);
+    session.loadCircuit(validated);
+    broadcastCircuitUpdate();
+    broadcastSimulationUpdate(null);
+    return { filePath, circuit: validated, name: path.basename(filePath) };
+  });
+
+  ipcMain.handle("spicebench:export-netlist", async () => {
+    if (!mainWindow) return null;
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: "Export SPICE Netlist",
+      defaultPath: "circuit.cir",
+      filters: [
+        { name: "SPICE Netlist (*.cir, *.net)", extensions: ["cir", "net"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
+      ],
+    });
+    if (canceled || !filePath) return null;
+    const compiled = NetlistCompiler.compile(session.getGraph());
+    await fs.writeFile(filePath, compiled.netlist, "utf-8");
+    return { filePath, name: path.basename(filePath) };
+  });
 
   ipcMain.handle("spicebench:load-sample", (_e, name) => {
     const circuit = loadSample(name);
