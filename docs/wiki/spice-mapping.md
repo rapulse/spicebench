@@ -38,6 +38,11 @@
 | `BJT_PNP` | `Q_<id> <collector> <base> <emitter> <model>` | `Q_Q1 N001 N002 0 2N3906` |
 | `SWITCH_SPST` | Резистор с малым/большим сопротивлением: `1m` (вкл) / `100meg` (выкл) | `R_S1 N001 N002 1m` |
 | `POTENTIOMETER` | Два последовательных резистора: `R_<id>_A` и `R_<id>_B` | `R_R1_A N001 N_W 5k`<br>`R_R1_B N_W N002 5k` |
+| `*_GATE` (AND/OR/NOT/NAND/NOR/XOR) | `X_<id> <in1> [<in2>] <out> GATE_<TYPE>`, макромодель на B-источнике (ADR-008) | `X_U1 N001 N002 N003 GATE_AND` |
+| `OPAMP_IDEAL` / `OPAMP_741` | `X_<id> ... OPAMP_IDEAL` / `LM741` (E-источник; у 741 ограничение по питанию через B) | `X_U1 N001 N002 N003 OPAMP_IDEAL` |
+
+**Синтаксис B-выражений ngspice:** логика `&&`, `||`, `!`, сравнения `> < >= <= == !=`, тернарный
+`? :`. Одиночные `&`/`|` вешают разбор, `^` означает степень, а не XOR.
 
 ---
 
@@ -66,3 +71,18 @@
    * `.ac <dec|oct|lin> <pts> <fstart> <fstop>` (например, `.ac dec 50 10 100k`).
 4. **Завершение нетлиста:**
    * Опции `.options noacct` и терминатор `.end`.
+
+---
+
+## 5. Движок и результаты (ADR-007)
+
+* Движок: ngspice-45.2 (WASM, `eecircuit-engine@1.9.0`) в `worker_threads`, класс `WasmNgspiceEngine`.
+  `SpiceRunner({ timeoutMs = 5000, engine = "wasm" | "native", workerPath? })` сериализует запуски.
+* Имена векторов: `v(<node>)`, `i(<vsource>)`, всё в нижнем регистре. Узел земли `0` в результатах
+  **не возвращается**.
+* `.tran` без `uic` стартует из рабочей точки `.op`: заряженные конденсаторы не будут «заряжаться».
+  Для переходного процесса от нуля нужен `uic` (и `IC=` у элементов).
+* Ошибки бросаются как `SimulationError` с `details.code`: `SPICE_ERROR` (фатальные сообщения
+  ngspice, в том числе пропущенные строки «... ignored!»), `SIMULATION_TIMEOUT`, `ENGINE_ERROR`,
+  `PARSE_ERROR`. Нефатальные сообщения (`Note: ... DC 0 assumed`) попадают в `SimulationResult.warnings`.
+* XSPICE code models недоступны (ADR-008).

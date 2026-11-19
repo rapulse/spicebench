@@ -24,6 +24,19 @@ export default defineConfig({
         },
       },
       {
+        // ngspice WASM worker (ADR-007): separate bundle incl. eecircuit-engine,
+        // loaded by WasmNgspiceEngine via worker_threads from dist-electron/ngspice-worker.js
+        entry: path.join(__dirname, "../../packages/sim/src/runner/ngspice-worker.ts"),
+        vite: {
+          build: {
+            outDir: "dist-electron",
+            rollupOptions: {
+              output: { entryFileNames: "ngspice-worker.js" },
+            },
+          },
+        },
+      },
+      {
         // Preload entry
         entry: path.join(__dirname, "electron/preload.ts"),
         onstart(options) {

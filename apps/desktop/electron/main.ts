@@ -16,7 +16,10 @@ import { NetlistCompiler, SpiceImporter } from "@spicebench/sim";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
-const session = new CircuitSession();
+// ngspice (WASM) runs in a worker bundled next to main.js as dist-electron/ngspice-worker.js (ADR-007).
+const session = new CircuitSession(undefined, {
+  runner: { workerPath: path.join(__dirname, "ngspice-worker.js") },
+});
 const mcpInstance = createSpiceBenchMcpServer({ session });
 let mcpTransport: HttpSseServerInstance | null = null;
 let mcpPort = parseInt(process.env["SPICEBENCH_MCP_PORT"] || "3100", 10);
@@ -483,6 +486,11 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
   createWindow();
 
+  // Load ngspice WASM in the background so the first Power On is instant.
+  void session.warmUpSimulator().then((ok) => {
+    if (!ok) console.error("[SpiceBench]: ngspice WASM engine failed to initialize");
+  });
+
   // Auto-start embedded MCP server (defaults to 3100 or SPICEBENCH_MCP_PORT)
   await startMcpServer(mcpPort);
 
@@ -495,6 +503,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", async () => {
   await stopMcpServer();
+  await session.dispose();
 });
 
 app.on("window-all-closed", () => {

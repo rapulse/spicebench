@@ -34,6 +34,10 @@ export interface SimulationResult {
   success: boolean;
   data: SimulationData;
   rawOutput?: string;
+  /** Non-fatal ngspice notes and warnings. */
+  warnings: string[];
+  /** Engine that produced the result, e.g. "ngspice-wasm". */
+  engine: string;
   durationMs: number;
 }
 

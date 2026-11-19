@@ -17,7 +17,7 @@ describe("Phase 2.3: Golden Fixtures (Analytical Verification)", () => {
     // Vs = 12V, R1 = 30k, R2 = 10k
     // Theoretical: Vout = Vs * R2 / (R1 + R2) = 12 * 10k / 40k = 3.000V
     // Total current: I = 12V / 40k = 0.300mA = 3.000e-4 A
-    runner = new SpiceRunner({ useWorkerThread: false });
+    runner = new SpiceRunner();
 
     const graph = new CircuitGraph();
     const v1 = createDefaultComponent("DC_VOLTAGE_SOURCE", "V1", { x: 10, y: 10 });
@@ -58,14 +58,12 @@ describe("Phase 2.3: Golden Fixtures (Analytical Verification)", () => {
     // Voltage divider midpoint is 3.000V
     expect(op.nodeVoltages[outNode]).toBeCloseTo(3.0, 4);
 
-    // Ground is 0V
-    expect(op.nodeVoltages["0"]).toBeCloseTo(0.0, 4);
+    // ngspice does not report the ground node (it is 0 V by definition).
+    expect(op.nodeVoltages["0"]).toBeUndefined();
 
-    // Current from V1 source is -0.3mA (SPICE sign convention: current leaving positive terminal)
-    const iV1 = op.branchCurrents["v_v1"];
-    if (iV1 !== undefined) {
-      expect(Math.abs(iV1)).toBeCloseTo(0.0003, 5);
-    }
+    // SPICE sign convention: branch current flows into the positive terminal,
+    // so a source delivering 0.3 mA reports -3.0e-4 A.
+    expect(op.branchCurrents["v_v1"]).toBeCloseTo(-0.0003, 7);
   });
 
   it("Fixture 2: RC Step Transient Response (Tau = 1ms, Vc(t) = Vs*(1 - exp(-t/tau)))", async () => {
@@ -74,7 +72,7 @@ describe("Phase 2.3: Golden Fixtures (Analytical Verification)", () => {
     // Vc(1ms)  = 5 * (1 - exp(-1)) = 3.1606 V
     // Vc(3ms)  = 5 * (1 - exp(-3)) = 4.7511 V
     // Vc(5ms)  = 5 * (1 - exp(-5)) = 4.9663 V
-    runner = new SpiceRunner({ useWorkerThread: false });
+    runner = new SpiceRunner();
 
     const graph = new CircuitGraph();
     const v1 = createDefaultComponent("DC_VOLTAGE_SOURCE", "V1", { x: 10, y: 10 });
@@ -153,7 +151,7 @@ describe("Phase 2.3: Golden Fixtures (Analytical Verification)", () => {
     // Z = R = 10 Ohm
     // I_peak = 1V / 10 Ohm = 0.100 A (100 mA)
     // Vc_peak = I_peak * (1 / (2*pi*f0*C)) = 0.1 * 62.83 = 6.283 V
-    runner = new SpiceRunner({ useWorkerThread: false });
+    runner = new SpiceRunner();
 
     const graph = new CircuitGraph();
     const v1 = createDefaultComponent("AC_VOLTAGE_SOURCE", "V1", { x: 10, y: 10 });
@@ -230,7 +228,7 @@ describe("Phase 2.3: Golden Fixtures (Analytical Verification)", () => {
   });
 
   it("Fixture 4: Structured Error Reporting (Detects Problematic Components & Nodes)", async () => {
-    runner = new SpiceRunner({ useWorkerThread: false });
+    runner = new SpiceRunner();
 
     // Circuit missing value on resistor R_FAULT
     const faultyNetlist = `
@@ -253,7 +251,7 @@ R_FAULT N001 0
   });
 
   it("Fixture 5: Digital Logic Gate & Op-Amp Macromodels Simulation", async () => {
-    runner = new SpiceRunner({ useWorkerThread: false });
+    runner = new SpiceRunner();
 
     const graph = new CircuitGraph();
     const v1 = createDefaultComponent("DC_VOLTAGE_SOURCE", "V1", { x: 10, y: 10 });

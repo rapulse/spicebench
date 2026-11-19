@@ -1,207 +1,77 @@
-import { Worker } from "node:worker_threads";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-import { SimulationResult, SimulationErrorDetails } from "../parser/types";
-import { SpiceRawParser } from "../parser/spice-raw-parser";
-import { SpiceStdoutParser } from "../parser/spice-stdout-parser";
-import { WorkerTaskMessage, WorkerResultMessage } from "./spice-worker";
-import { BuiltinMnaEngine } from "./builtin-mna-engine";
+import type { SimulationResult } from "../parser/types";
+import { type SpiceEngine, SimulationError } from "./engine-interface";
+import { WasmNgspiceEngine } from "./wasm-ngspice-engine";
 import { NativeNgspiceEngine } from "./native-engine";
 
 export interface SpiceRunnerConfig {
-  timeoutMs?: number; // Default 5000ms as required by AGENTS.md rule 4
-  preferNative?: boolean;
-  customBinaryPath?: string;
-  useWorkerThread?: boolean; // Defaults to true
+  /** Hard limit per run (AGENTS.md §4). Default 5000 ms. */
+  timeoutMs?: number;
+  /** "wasm" (default, bundled ngspice) or "native" (external `ngspice` CLI). */
+  engine?: "wasm" | "native";
+  /** Worker script for the WASM engine (Electron passes the bundled file). */
+  workerPath?: string;
+  /** Path to the ngspice binary for the native engine. */
+  ngspiceBinaryPath?: string;
+  /** Inject a custom engine (tests). Overrides `engine`. */
+  customEngine?: SpiceEngine;
 }
 
+/**
+ * Runs SPICE netlists through ngspice with a hard timeout.
+ * Runs are serialized: one engine instance processes one netlist at a time.
+ */
 export class SpiceRunner {
   public readonly timeoutMs: number;
-  private worker?: Worker;
-  private taskIdCounter = 1;
+  private readonly engine: SpiceEngine;
+  private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly config: SpiceRunnerConfig = {}) {
+  constructor(config: SpiceRunnerConfig = {}) {
     this.timeoutMs = config.timeoutMs ?? 5000;
+    this.engine =
+      config.customEngine ??
+      (config.engine === "native"
+        ? new NativeNgspiceEngine(config.ngspiceBinaryPath)
+        : new WasmNgspiceEngine({ workerPath: config.workerPath }));
   }
 
-  /**
-   * Executes a SPICE netlist, parses the results, and returns structured SimulationResult.
-   * Guarantees strict termination on timeout with automatic worker restart.
-   */
-  public async run(netlist: string, overrideTimeoutMs?: number): Promise<SimulationResult> {
-    const timeout = overrideTimeoutMs ?? this.timeoutMs;
-    const startTime = Date.now();
-
-    const output = await (this.config.useWorkerThread !== false
-      ? this.runInWorker(netlist, timeout)
-      : this.runInline(netlist, timeout));
-
-    const durationMs = Date.now() - startTime;
-
-    // Check for errors in stdout/stderr or non-zero exit code
-    const combinedLog = `${output.stdout}\n${output.stderr}`;
-    const detectedError = SpiceStdoutParser.extractErrors(combinedLog);
-
-    if (output.exitCode !== 0 || (detectedError && !output.rawFileText)) {
-      const errMsg =
-        detectedError?.message ||
-        output.stderr.trim() ||
-        output.stdout.trim() ||
-        `Process exited with code ${output.exitCode}`;
-      const prob = [
-        ...(detectedError?.problematicComponents ?? []),
-        ...(detectedError?.problematicNodes ?? []),
-      ].filter(Boolean);
-      throw new Error(
-        `[SPICE_ERROR] ${errMsg}${prob.length > 0 ? `\nProblematic elements: ${prob.join(", ")}` : ""}`,
-      );
-    }
-
-    // Parse simulation data
-    if (output.rawFileText) {
-      try {
-        const data = SpiceRawParser.parse(output.rawFileText);
-        return {
-          mode: data.mode,
-          success: true,
-          data,
-          rawOutput: output.rawFileText,
-          durationMs,
-        };
-      } catch (parseErr) {
-        throw new Error(
-          `[PARSE_ERROR] Failed to parse SPICE rawfile: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
-        );
-      }
-    }
-
-    // Fallback: parse operating point table from stdout
-    if (output.stdout.includes("Node") && output.stdout.includes("Voltage")) {
-      const opData = SpiceStdoutParser.parseOpStdout(output.stdout);
-      return {
-        mode: "op",
-        success: true,
-        data: opData,
-        rawOutput: output.stdout,
-        durationMs,
-      };
-    }
-
-    throw new Error(`[ENGINE_ERROR] Simulation produced no parseable data.\nLog: ${combinedLog}`);
+  public get engineName(): string {
+    return this.engine.name;
   }
 
-  private async runInWorker(
-    netlist: string,
-    timeoutMs: number,
-  ): Promise<{ stdout: string; stderr: string; rawFileText?: string; exitCode: number }> {
-    const taskId = `task_${this.taskIdCounter++}`;
-
-    return new Promise((resolve, reject) => {
-      let isSettled = false;
-
-      // Ensure worker exists
-      if (!this.worker) {
-        this.initWorker();
-      }
-
-      const timer = setTimeout(async () => {
-        if (isSettled) return;
-        isSettled = true;
-
-        // Forcefully kill hung worker and recreate
-        await this.terminateAndResetWorker();
-
-        const err: SimulationErrorDetails = {
-          code: "SIMULATION_TIMEOUT",
-          message: `Simulation exceeded timeout of ${timeoutMs}ms. Worker terminated.`,
-        };
-        reject(new Error(`[${err.code}] ${err.message}`));
-      }, timeoutMs);
-
-      const messageHandler = (res: WorkerResultMessage) => {
-        if (res.id !== taskId || isSettled) return;
-        isSettled = true;
-        clearTimeout(timer);
-        this.worker?.off("message", messageHandler);
-
-        if (res.success && res.output) {
-          resolve(res.output);
-        } else {
-          reject(new Error(res.error || "Worker simulation failed"));
-        }
-      };
-
-      this.worker!.on("message", messageHandler);
-
-      const taskMsg: WorkerTaskMessage = {
-        id: taskId,
-        netlist,
-        timeoutMs,
-        preferNative: this.config.preferNative,
-        customBinaryPath: this.config.customBinaryPath,
-      };
-
-      this.worker!.postMessage(taskMsg);
-    });
+  public run(netlist: string, overrideTimeoutMs?: number): Promise<SimulationResult> {
+    const task = this.queue.then(() => this.runNow(netlist, overrideTimeoutMs ?? this.timeoutMs));
+    this.queue = task.catch(() => undefined);
+    return task;
   }
 
-  private async runInline(
-    netlist: string,
-    timeoutMs: number,
-  ): Promise<{ stdout: string; stderr: string; rawFileText?: string; exitCode: number }> {
-    const engine = new BuiltinMnaEngine();
-    if (this.config.preferNative) {
-      const native = new NativeNgspiceEngine(this.config.customBinaryPath);
-      if (await native.isAvailable()) {
-        return native.execute(netlist, timeoutMs);
-      }
-    }
-    return engine.execute(netlist, timeoutMs);
-  }
-
-  private initWorker(): void {
-    const currentDir = path.dirname(fileURLToPath(import.meta.url));
-    // Determine worker file (supports both ts during dev and compiled js in dist)
-    const workerTs = path.join(currentDir, "spice-worker.ts");
-    const workerJs = path.join(currentDir, "spice-worker.js");
-
-    const workerPath = workerJs; // Default path
-
+  private async runNow(netlist: string, timeoutMs: number): Promise<SimulationResult> {
+    const started = Date.now();
     try {
-      this.worker = new Worker(workerPath, {
-        execArgv: process.execArgv,
-      });
-    } catch {
-      // In TS test runner environment, fallback to ts worker or inline
-      try {
-        this.worker = new Worker(workerTs, {
-          execArgv: ["--loader", "ts-node/esm", ...process.execArgv],
-        });
-      } catch {
-        // Fallback to inline execution if worker cannot be spawned directly in ts environment
-        this.config.useWorkerThread = false;
-      }
-    }
-
-    if (this.worker) {
-      this.worker.on("error", () => {
-        this.terminateAndResetWorker();
+      const out = await this.engine.run(netlist, timeoutMs);
+      return {
+        mode: out.data.mode,
+        success: true,
+        data: out.data,
+        rawOutput: out.log,
+        warnings: out.warnings,
+        engine: this.engine.name,
+        durationMs: Date.now() - started,
+      };
+    } catch (err) {
+      if (err instanceof SimulationError) throw err;
+      throw new SimulationError({
+        code: "ENGINE_ERROR",
+        message: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  public async terminateAndResetWorker(): Promise<void> {
-    if (this.worker) {
-      try {
-        await this.worker.terminate();
-      } catch {
-        // Ignore termination error
-      }
-      this.worker = undefined;
-    }
+  /** Pre-loads the engine (WASM init ≈0.3 s) so the first run is fast. */
+  public async warmUp(): Promise<boolean> {
+    return this.engine.isAvailable();
   }
 
   public async destroy(): Promise<void> {
-    await this.terminateAndResetWorker();
+    await this.engine.dispose();
   }
 }

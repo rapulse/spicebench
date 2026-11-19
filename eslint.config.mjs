@@ -12,6 +12,7 @@ export default tseslint.config(
       "**/out/**",
       "**/node_modules/**",
       "**/coverage/**",
+      "**/.tmp/**",
       "**/*.d.ts"
     ]
   },

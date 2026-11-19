@@ -1,5 +1,5 @@
 export * from "./engine-interface";
-export * from "./builtin-mna-engine";
+export * from "./wasm-ngspice-engine";
 export * from "./native-engine";
 export * from "./spice-runner";
-export * from "./spice-worker";
+export type * from "./ngspice-protocol";

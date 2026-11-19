@@ -31,6 +31,7 @@ import {
   NetlistCompiler,
   CompiledNetlist,
   SpiceRunner,
+  type SpiceRunnerConfig,
   SimulationResult,
   SimulationMode,
   TranOptions,
@@ -87,10 +88,19 @@ export interface CircuitStats {
   instrumentCount: number;
 }
 
+export interface CircuitSessionOptions {
+  /** Simulator settings (engine, worker path, timeout). See ADR-007. */
+  runner?: SpiceRunnerConfig;
+}
+
 export interface SimulationSummary {
   mode: SimulationMode;
   success: boolean;
   durationMs: number;
+  /** Simulator that produced the result, e.g. "ngspice-wasm". */
+  engine: string;
+  /** Non-fatal ngspice notes/warnings. */
+  warnings: string[];
   pinVoltages?: Record<string, number>;
   nodeVoltages?: Record<string, number>;
   branchCurrents?: Record<string, number>;
@@ -144,9 +154,19 @@ export class CircuitSession {
   private agentActionListeners: Set<(action: AgentActionLog) => void> = new Set();
   private actionHistory: AgentActionLog[] = [];
 
-  constructor(initialProject?: CircuitProject) {
+  constructor(initialProject?: CircuitProject, options: CircuitSessionOptions = {}) {
     this.graph = new CircuitGraph(initialProject);
-    this.runner = new SpiceRunner({ useWorkerThread: false });
+    this.runner = new SpiceRunner(options.runner);
+  }
+
+  /** Pre-loads ngspice (WASM init) so the first simulation is fast. */
+  public async warmUpSimulator(): Promise<boolean> {
+    return this.runner.warmUp();
+  }
+
+  /** Stops the simulator worker. Call on shutdown. */
+  public async dispose(): Promise<void> {
+    await this.runner.destroy();
   }
 
   public onCircuitChange(listener: (circuit: CircuitProject) => void): () => void {
@@ -648,6 +668,8 @@ export class CircuitSession {
       mode: result.mode,
       success: result.success,
       durationMs: result.durationMs,
+      engine: result.engine,
+      warnings: result.warnings,
       rawResult: result,
     };
 

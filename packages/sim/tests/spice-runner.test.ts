@@ -3,6 +3,7 @@ import { CircuitGraph, createDefaultComponent } from "@spicebench/core";
 import { NetlistCompiler } from "../src/compiler/netlist-compiler";
 import { SpiceRunner } from "../src/runner/spice-runner";
 import { OpResult } from "../src/parser/types";
+import { SimulationError } from "../src/runner/engine-interface";
 
 describe("SpiceRunner (Simulation Execution & Timeout Guard)", () => {
   let runner: SpiceRunner;
@@ -14,7 +15,7 @@ describe("SpiceRunner (Simulation Execution & Timeout Guard)", () => {
   });
 
   it("executes OP simulation for Voltage Divider and returns exact node voltages", async () => {
-    runner = new SpiceRunner({ useWorkerThread: false });
+    runner = new SpiceRunner();
 
     const graph = new CircuitGraph();
     const v1 = createDefaultComponent("DC_VOLTAGE_SOURCE", "V1", { x: 10, y: 10 });
@@ -51,38 +52,54 @@ describe("SpiceRunner (Simulation Execution & Timeout Guard)", () => {
     expect(opData.nodeVoltages[midNode]).toBeCloseTo(5.0, 3);
   });
 
-  it("enforces timeout and terminates simulation when execution exceeds time limit", async () => {
-    // Test with a tiny 50ms timeout to verify watchdog behavior
-    runner = new SpiceRunner({ timeoutMs: 50, useWorkerThread: false });
+  it("enforces a real timeout on a hung ngspice run and recovers with a fresh worker", async () => {
+    runner = new SpiceRunner({ timeoutMs: 300 });
+    await runner.warmUp();
 
-    // Mock an engine that hangs or takes too long
-    const mockHangingRunner = new (class extends SpiceRunner {
-      public override async run(netlist: string, overrideTimeoutMs?: number) {
-        const timeout = overrideTimeoutMs ?? this.timeoutMs;
-        return new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject(new Error(`[SIMULATION_TIMEOUT] Simulation exceeded timeout of ${timeout}ms. Worker terminated.`));
-          }, timeout);
-        });
-      }
-    })({ timeoutMs: 50 });
+    // 1 s of a 1 MHz sine at 1 ns step: ~1e9 points, far beyond 300 ms.
+    const endless = "* endless\nV1 in 0 SIN(0 1 1meg)\nR1 in a 1k\nC1 a 0 1n\n.tran 1n 1\n.end";
+    const t0 = Date.now();
+    await expect(runner.run(endless)).rejects.toThrow(/\[SIMULATION_TIMEOUT\]/);
+    expect(Date.now() - t0).toBeLessThan(1500);
 
-    await expect(mockHangingRunner.run("* Hanging simulation")).rejects.toThrow(
-      /\[SIMULATION_TIMEOUT\]/,
-    );
+    // Next run spawns a new worker and succeeds.
+    const ok = await runner.run("* ok\nV1 a 0 DC 2\nR1 a 0 1k\n.op\n.end", 5000);
+    expect((ok.data as OpResult).nodeVoltages["a"]).toBeCloseTo(2, 9);
   });
 
-  it("returns structured SPICE error when simulation output contains ngspice error messages", async () => {
-    runner = new SpiceRunner({ useWorkerThread: false });
+  it("serializes concurrent runs on a single engine instance", async () => {
+    runner = new SpiceRunner();
+    const nl = (v: number) => `* v${v}\nV1 a 0 DC ${v}\nR1 a b 1k\nR2 b 0 1k\n.op\n.end`;
+    const results = await Promise.all([1, 2, 3, 4].map((v) => runner.run(nl(v))));
+    results.forEach((r, i) => {
+      expect((r.data as OpResult).nodeVoltages["b"]).toBeCloseTo((i + 1) / 2, 9);
+      expect(r.engine).toBe("ngspice-wasm");
+    });
+  });
 
-    // Netlist with invalid syntax / error
+  it("returns structured SPICE error when the netlist is invalid", async () => {
+    runner = new SpiceRunner();
+
+    // Resistor without second node and value
     const faultyNetlist = `
 * Faulty Circuit
-R1 N001 N002
+V1 n001 0 DC 1
+R1 N001
 .op
 .end
 `;
 
-    await expect(runner.run(faultyNetlist)).rejects.toThrow(/\[SPICE_ERROR\]|\[ENGINE_ERROR\]/);
+    const err = await runner.run(faultyNetlist).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SimulationError);
+    const details = (err as SimulationError).details;
+    expect(details.code).toBe("SPICE_ERROR");
+    expect(details.problematicComponents).toContain("r1");
+  });
+
+  it("keeps non-fatal ngspice notes as warnings", async () => {
+    runner = new SpiceRunner();
+    const res = await runner.run("* ac source without dc\nVIN in 0 AC 1\nR1 in 0 1k\n.op\n.end");
+    expect(res.success).toBe(true);
+    expect(res.warnings.join(" ")).toMatch(/DC 0 assumed/i);
   });
 });
