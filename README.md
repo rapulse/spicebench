@@ -1,6 +1,6 @@
 # SpiceBench
 
-**English** | **[Русская версия](#русская-версия)**
+**English** | **[Русская версия](#русская-версия)** · **Concept & Co-author:** [Taraved](https://github.com/Taraved/)
 
 > A modern, cross-platform (**macOS Apple Silicon / Intel** & **Windows 10/11**) electronic circuit simulator inspired by the classic **Electronics Workbench 5.12** workflow — powered by the real **`ngspice 45.2`** SPICE engine (WebAssembly via `eecircuit-engine`) with a built-in **MCP (Model Context Protocol) server** for AI agents.
 
@@ -160,6 +160,8 @@ SpiceBench is an independent, clean-room open-source project. It is **not** affi
 ---
 
 # Русская версия
+
+**Идея программы и соавтор:** [Taraved](https://github.com/Taraved/)
 
 > Современная кроссплатформенная (**macOS Apple Silicon / Intel** и **Windows 10/11**) редакция классического симулятора электронных схем в стиле **Electronics Workbench 5.12** — на базе настоящего SPICE-ядра **`ngspice 45.2`** (WebAssembly через `eecircuit-engine`) и со встроенным **MCP-сервером (Model Context Protocol)** для ИИ-агентов.
 
