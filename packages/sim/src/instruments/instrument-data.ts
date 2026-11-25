@@ -78,7 +78,23 @@ export interface FunctionGeneratorData {
   dutyCycle: number;
 }
 
-export type InstrumentData = MultimeterData | OscilloscopeData | BodePlotterData | FunctionGeneratorData;
+export interface MeterIndicatorData {
+  type: "VOLTMETER" | "AMMETER";
+  id: string;
+  status: InstrumentStatus;
+  coupling: "DC" | "AC";
+  value: number | null;
+  unit: "V" | "A";
+  source: "op" | "tran" | null;
+  note?: string;
+}
+
+export type InstrumentData =
+  | MultimeterData
+  | OscilloscopeData
+  | BodePlotterData
+  | FunctionGeneratorData
+  | MeterIndicatorData;
 
 /** Reference for the multimeter dB mode: 0 dB = 1 V. TODO(ui): confirm against EWB 5.12. */
 export const DB_REFERENCE_V = 1;
@@ -148,7 +164,10 @@ function hasActiveSources(graph: CircuitGraph, except: string): boolean {
     "DC_VOLTAGE_SOURCE",
     "AC_VOLTAGE_SOURCE",
     "DC_CURRENT_SOURCE",
+    "AC_CURRENT_SOURCE",
     "PULSE_VOLTAGE_SOURCE",
+    "VCC",
+    "VDD",
     "FUNCTION_GENERATOR",
   ]);
   return graph.getAllComponents().some((c) => c.id !== except && active.has(c.type));
@@ -316,12 +335,65 @@ function functionGenerator(ctx: Ctx, comp: Component): FunctionGeneratorData {
   return { type: "FUNCTION_GENERATOR", id: comp.id, status: "ok", ...g };
 }
 
+function meterIndicator(
+  ctx: Ctx,
+  comp: Component,
+  kind: "VOLTMETER" | "AMMETER",
+  r: AnalysisResults,
+): MeterIndicatorData {
+  const coupling = String(comp.params["mode"] ?? "DC").toUpperCase() === "AC" ? "AC" : "DC";
+  const unit = kind === "VOLTMETER" ? "V" : "A";
+  const base = { type: kind, id: comp.id, coupling, unit } as const;
+  const pos = nodeOf(ctx, comp.id, "pos");
+  const neg = nodeOf(ctx, comp.id, "neg");
+  if (!pos || !neg) {
+    return { ...base, status: "not_connected", value: null, source: null, note: "Both terminals must be connected" };
+  }
+
+  const senseVec = `v_${comp.id.toLowerCase()}_sense`;
+  const tran = r.tran?.data as TranResult | undefined;
+  const op = r.op?.data as OpResult | undefined;
+  const wantTran = coupling === "AC" || (!op && !!tran);
+
+  let reading: number | undefined;
+  let source: "op" | "tran" | null = null;
+  if (wantTran && tran) {
+    let sig: number[] | undefined;
+    if (kind === "AMMETER") sig = tran.variables[`i(${senseVec})`];
+    else {
+      const a = tranVoltage(tran, pos);
+      const b = tranVoltage(tran, neg);
+      sig = a && b ? a.map((x, i) => x - b[i]!) : undefined;
+    }
+    if (sig) {
+      const [i0, i1] = settledRange(tran.time, ctx.graph);
+      const st = timeStats(tran.time, sig, i0, i1);
+      reading = coupling === "AC" ? st.acRms : st.mean;
+      source = "tran";
+    }
+  } else if (op) {
+    if (kind === "AMMETER") reading = op.branchCurrents[senseVec];
+    else {
+      const a = opVoltage(op, pos);
+      const b = opVoltage(op, neg);
+      reading = a !== undefined && b !== undefined ? a - b : undefined;
+    }
+    if (reading !== undefined) source = "op";
+    if (coupling === "AC" && reading !== undefined) reading = 0;
+  }
+
+  if (reading === undefined) return { ...base, status: "no_data", value: null, source: null };
+  return { ...base, status: "ok", value: reading, source };
+}
+
 /** Which analyses the instruments of this circuit need on "Power On". */
 export function requiredAnalyses(graph: CircuitGraph): Array<"op" | "tran" | "ac"> {
   const comps = graph.getAllComponents();
   const set = new Set<"op" | "tran" | "ac">();
   const timeSources = comps.some((c) =>
-    ["AC_VOLTAGE_SOURCE", "PULSE_VOLTAGE_SOURCE", "FUNCTION_GENERATOR", "TIMER_555"].includes(c.type),
+    ["AC_VOLTAGE_SOURCE", "AC_CURRENT_SOURCE", "PULSE_VOLTAGE_SOURCE", "FUNCTION_GENERATOR", "TIMER_555"].includes(
+      c.type,
+    ),
   );
   for (const c of comps) {
     if (c.type === "BODE_PLOTTER") set.add("ac");
@@ -330,6 +402,11 @@ export function requiredAnalyses(graph: CircuitGraph): Array<"op" | "tran" | "ac
       const { mode, coupling } = getMultimeterSettings(graph, c);
       if (mode === "R") set.add("op");
       else if (coupling === "AC" || timeSources) set.add("tran");
+      else set.add("op");
+    }
+    if (c.type === "VOLTMETER" || c.type === "AMMETER") {
+      const coupling = String(c.params["mode"] ?? "DC").toUpperCase() === "AC" ? "AC" : "DC";
+      if (coupling === "AC" || timeSources) set.add("tran");
       else set.add("op");
     }
   }
@@ -357,6 +434,12 @@ export function computeInstrumentData(
         break;
       case "FUNCTION_GENERATOR":
         out[comp.id] = functionGenerator(ctx, comp);
+        break;
+      case "VOLTMETER":
+        out[comp.id] = meterIndicator(ctx, comp, "VOLTMETER", results);
+        break;
+      case "AMMETER":
+        out[comp.id] = meterIndicator(ctx, comp, "AMMETER", results);
         break;
     }
   }

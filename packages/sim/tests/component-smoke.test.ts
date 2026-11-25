@@ -50,8 +50,8 @@ describe("Component smoke test: all catalog types run on ngspice", () => {
     await runner.destroy();
   });
 
-  it("catalog has 33 non-ground types", () => {
-    expect(TYPES.length).toBe(33);
+  it("catalog has 42 non-ground types", () => {
+    expect(TYPES.length).toBe(42);
   });
 
   for (const type of TYPES) {

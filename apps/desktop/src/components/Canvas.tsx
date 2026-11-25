@@ -36,6 +36,10 @@ interface CanvasProps {
   onComponentDoubleClick?: (component: Component) => void;
   onToggleSwitch?: (component: Component) => void;
   onAdjustPotentiometer?: (component: Component, deltaPct: number) => void;
+  zoom?: number;
+  onZoomChange?: (zoom: number) => void;
+  showGrid?: boolean;
+  showNodeVoltages?: boolean;
   children?: React.ReactNode;
 }
 
@@ -116,12 +120,26 @@ export const Canvas: React.FC<CanvasProps> = ({
   onComponentDoubleClick,
   onToggleSwitch,
   onAdjustPotentiometer,
+  zoom: controlledZoom,
+  onZoomChange,
+  showGrid = true,
+  showNodeVoltages = true,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Pan and Zoom
-  const [zoom, setZoom] = useState(1.0);
+  const [internalZoom, setInternalZoom] = useState(1.0);
+  const zoom = controlledZoom ?? internalZoom;
+  const updateZoom = useCallback(
+    (next: number | ((prev: number) => number)) => {
+      const val = typeof next === "function" ? next(zoom) : next;
+      const clamped = Math.min(3.0, Math.max(0.4, Number(val.toFixed(2))));
+      if (onZoomChange) onZoomChange(clamped);
+      else setInternalZoom(clamped);
+    },
+    [zoom, onZoomChange]
+  );
   const [pan, setPan] = useState({ x: 60, y: 60 });
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
@@ -198,13 +216,14 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [wiring]);
 
   // Handle Zoom via Wheel
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    setZoom((prevZoom) => {
-      return Math.min(3.0, Math.max(0.4, prevZoom * zoomFactor));
-    });
-  }, []);
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      updateZoom((prevZoom) => prevZoom * zoomFactor);
+    },
+    [updateZoom]
+  );
 
   // Handle Drag & Drop from PartsBin
   const handleDragOver = (e: React.DragEvent) => {
@@ -525,7 +544,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         </defs>
 
         {/* Background dot grid */}
-        <rect width="100%" height="100%" fill="url(#ewb-grid-pattern)" />
+        {showGrid && <rect width="100%" height="100%" fill="url(#ewb-grid-pattern)" />}
 
         {/* Circuit Contents Group transformed by Pan and Zoom */}
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
@@ -621,6 +640,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                   component={comp}
                   isSelected={isCompSelected}
                   pinVoltages={simulation?.pinVoltages}
+                  instrumentData={simulation?.instruments?.[comp.id]}
                 />
 
                 {/* Component Pin Terminals (Interactive Click/Hover Dots) */}
@@ -659,7 +679,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 })}
 
                 {/* Live Simulation Node Voltage Overlays when simulation is active */}
-                {simulation?.pinVoltages && (
+                {showNodeVoltages && simulation?.pinVoltages && (
                   <g pointerEvents="none">
                     {comp.type === "RESISTOR" && (
                       <>

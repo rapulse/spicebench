@@ -234,6 +234,69 @@ export class NetlistCompiler {
         break;
       }
 
+      case "AC_CURRENT_SOURCE": {
+        // EWB semantics (ADR-012): "current" is RMS.
+        const nPos = getNode(comp.id, "pos");
+        const nNeg = getNode(comp.id, "neg");
+        const iRms = parseEngineeringValue(comp.params["current"] ?? comp.params["amplitude"] ?? "1A").value;
+        const f = parseEngineeringValue(comp.params["frequency"] ?? "1Hz").value;
+        const phase = parseFloat(String(comp.params["phase"] ?? "0").replace(/deg$/i, "")) || 0;
+        lines.push(
+          `I_${comp.id} ${nPos} ${nNeg} DC 0 AC ${sv(iRms)} ${phase} SIN(0 ${sv(iRms * Math.SQRT2)} ${sv(f)} 0 0 ${phase})`,
+        );
+        break;
+      }
+
+      case "VCC":
+      case "VDD": {
+        const nOut = getNode(comp.id, "out");
+        const val = parseEngineeringValue(comp.params["voltage"] ?? "5V").spiceValue;
+        lines.push(`V_${comp.id} ${nOut} 0 DC ${val}`);
+        break;
+      }
+
+      case "VCVS": {
+        const op = getNode(comp.id, "out_pos");
+        const on = getNode(comp.id, "out_neg");
+        const cp = getNode(comp.id, "ctrl_pos");
+        const cn = getNode(comp.id, "ctrl_neg");
+        const gain = parseEngineeringValue(comp.params["gain"] ?? "1").spiceValue;
+        lines.push(`E_${comp.id} ${op} ${on} ${cp} ${cn} ${gain}`);
+        break;
+      }
+
+      case "VCCS": {
+        const op = getNode(comp.id, "out_pos");
+        const on = getNode(comp.id, "out_neg");
+        const cp = getNode(comp.id, "ctrl_pos");
+        const cn = getNode(comp.id, "ctrl_neg");
+        const gm = parseEngineeringValue(comp.params["transconductance"] ?? "1").spiceValue;
+        lines.push(`G_${comp.id} ${op} ${on} ${cp} ${cn} ${gm}`);
+        break;
+      }
+
+      case "CCVS": {
+        const op = getNode(comp.id, "out_pos");
+        const on = getNode(comp.id, "out_neg");
+        const cp = getNode(comp.id, "ctrl_pos");
+        const cn = getNode(comp.id, "ctrl_neg");
+        const rm = parseEngineeringValue(comp.params["transresistance"] ?? "1k").spiceValue;
+        lines.push(`V_${comp.id}_ctrl ${cp} ${cn} DC 0`);
+        lines.push(`H_${comp.id} ${op} ${on} V_${comp.id}_ctrl ${rm}`);
+        break;
+      }
+
+      case "CCCS": {
+        const op = getNode(comp.id, "out_pos");
+        const on = getNode(comp.id, "out_neg");
+        const cp = getNode(comp.id, "ctrl_pos");
+        const cn = getNode(comp.id, "ctrl_neg");
+        const gain = parseEngineeringValue(comp.params["gain"] ?? "1").spiceValue;
+        lines.push(`V_${comp.id}_ctrl ${cp} ${cn} DC 0`);
+        lines.push(`F_${comp.id} ${op} ${on} V_${comp.id}_ctrl ${gain}`);
+        break;
+      }
+
       case "PULSE_VOLTAGE_SOURCE": {
         const nPos = getNode(comp.id, "pos");
         const nNeg = getNode(comp.id, "neg");
@@ -423,6 +486,23 @@ export class NetlistCompiler {
         break;
       }
 
+      case "VOLTMETER": {
+        if (!connected("pos") || !connected("neg")) break;
+        const nPos = getNode(comp.id, "pos");
+        const nNeg = getNode(comp.id, "neg");
+        const rIn = parseEngineeringValue(comp.params["resistance"] ?? "10meg").spiceValue;
+        lines.push(`R_${comp.id}_sense ${nPos} ${nNeg} ${rIn}`);
+        break;
+      }
+
+      case "AMMETER": {
+        if (!connected("pos") || !connected("neg")) break;
+        const nPos = getNode(comp.id, "pos");
+        const nNeg = getNode(comp.id, "neg");
+        lines.push(`V_${comp.id}_sense ${nPos} ${nNeg} DC 0`);
+        break;
+      }
+
       case "SWITCH_SPST": {
         const n1 = getNode(comp.id, "1");
         const n2 = getNode(comp.id, "2");
@@ -525,10 +605,13 @@ export class NetlistCompiler {
       (c) =>
         c.type === "OSCILLOSCOPE" ||
         c.type === "AC_VOLTAGE_SOURCE" ||
+        c.type === "AC_CURRENT_SOURCE" ||
         c.type === "PULSE_VOLTAGE_SOURCE" ||
         c.type === "FUNCTION_GENERATOR" ||
         c.type === "TIMER_555" ||
-        (c.type === "MULTIMETER" && getMultimeterSettings(graph, c).coupling === "AC"),
+        (c.type === "MULTIMETER" && getMultimeterSettings(graph, c).coupling === "AC") ||
+        ((c.type === "VOLTMETER" || c.type === "AMMETER") &&
+          String(c.params["mode"] ?? "DC").toUpperCase() === "AC"),
     );
     return timeDependent ? "tran" : "op";
   }

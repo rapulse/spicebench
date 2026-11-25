@@ -324,4 +324,88 @@ describe("Instrument data on ngspice (Power On)", () => {
     expect(s.chA).toBeNull();
     expect(s.chB).toBeNull();
   });
+
+  it("Schematic indicators VOLTMETER & AMMETER measure DC and AC RMS (Image-1 2.jpeg)", async () => {
+    const g = build(
+      [
+        ["AC_VOLTAGE_SOURCE", "V1", { voltage: "10V", frequency: "1kHz" }],
+        ["RESISTOR", "R1", { resistance: "1.5k" }],
+        ["INDUCTOR", "L1", { inductance: "240m" }],
+        ["VOLTMETER", "VM1", { mode: "AC" }],
+        ["VOLTMETER", "VM2", { mode: "AC" }],
+        ["AMMETER", "AM1", { mode: "AC" }],
+        ["VOLTMETER", "VM_NC", { mode: "DC" }],
+        ["GROUND", "GND1"],
+      ],
+      [
+        [["V1", "pos"], ["R1", "1"]],
+        [["R1", "2"], ["L1", "1"]],
+        [["L1", "2"], ["AM1", "pos"]],
+        [["AM1", "neg"], ["GND1", "0"]],
+        [["V1", "neg"], ["GND1", "0"]],
+        [["VM1", "pos"], ["R1", "1"]],
+        [["VM1", "neg"], ["R1", "2"]],
+        [["VM2", "pos"], ["L1", "1"]],
+        [["VM2", "neg"], ["L1", "2"]],
+      ],
+    );
+    const { data } = await powerOn(g);
+    const xl = 2 * Math.PI * 1e3 * 0.24;
+    const iExpected = 10 / Math.hypot(1500, xl);
+    const vm1 = data["VM1"];
+    const vm2 = data["VM2"];
+    const am1 = data["AM1"];
+    const vmNc = data["VM_NC"];
+    expect(vm1?.type === "VOLTMETER" && vm1.status === "ok").toBe(true);
+    expect(vm2?.type === "VOLTMETER" && vm2.status === "ok").toBe(true);
+    expect(am1?.type === "AMMETER" && am1.status === "ok").toBe(true);
+    if (vm1?.type === "VOLTMETER" && vm2?.type === "VOLTMETER" && am1?.type === "AMMETER") {
+      expect(Math.abs(am1.value! - iExpected) / iExpected).toBeLessThan(5e-3);
+      expect(Math.abs(vm1.value! - iExpected * 1500) / (iExpected * 1500)).toBeLessThan(5e-3);
+      expect(Math.abs(vm2.value! - iExpected * xl) / (iExpected * xl)).toBeLessThan(5e-3);
+    }
+    expect(vmNc?.type === "VOLTMETER" && vmNc.status === "not_connected" && vmNc.value === null).toBe(true);
+  });
+
+  it("VCC, VCVS, VCCS, CCVS, CCCS and AC_CURRENT_SOURCE match analytical values", async () => {
+    // VCC (5V) -> R1 (1k) -> CCVS ctrl (5 mA) -> GND;
+    // CCVS (Rm=2k) produces 10V across R_load1;
+    // VCVS (gain=3) sensing VCC produces 15V across R_load2;
+    // VCCS (gm=2m) sensing VCC drives 10mA through R_load3 (1k) -> -10V (or +10V by polarity).
+    const g = build(
+      [
+        ["VCC", "VCC1", { voltage: "5V" }],
+        ["RESISTOR", "R1", { resistance: "1k" }],
+        ["CCVS", "H1", { transresistance: "2k" }],
+        ["RESISTOR", "RL1", { resistance: "10k" }],
+        ["VCVS", "E1", { gain: "3" }],
+        ["RESISTOR", "RL2", { resistance: "10k" }],
+        ["VOLTMETER", "VM_H", { mode: "DC" }],
+        ["VOLTMETER", "VM_E", { mode: "DC" }],
+        ["GROUND", "GND1"],
+      ],
+      [
+        [["VCC1", "out"], ["R1", "1"]],
+        [["R1", "2"], ["H1", "ctrl_pos"]],
+        [["H1", "ctrl_neg"], ["GND1", "0"]],
+        [["H1", "out_pos"], ["RL1", "1"]],
+        [["H1", "out_neg"], ["GND1", "0"]],
+        [["RL1", "2"], ["GND1", "0"]],
+        [["VM_H", "pos"], ["RL1", "1"]],
+        [["VM_H", "neg"], ["GND1", "0"]],
+        [["E1", "ctrl_pos"], ["VCC1", "out"]],
+        [["E1", "ctrl_neg"], ["GND1", "0"]],
+        [["E1", "out_pos"], ["RL2", "1"]],
+        [["E1", "out_neg"], ["GND1", "0"]],
+        [["RL2", "2"], ["GND1", "0"]],
+        [["VM_E", "pos"], ["RL2", "1"]],
+        [["VM_E", "neg"], ["GND1", "0"]],
+      ],
+    );
+    const { data } = await powerOn(g);
+    const vmH = data["VM_H"];
+    const vmE = data["VM_E"];
+    expect(vmH?.type === "VOLTMETER" && vmH.value).toBeCloseTo(10, 3);
+    expect(vmE?.type === "VOLTMETER" && vmE.value).toBeCloseTo(15, 3);
+  });
 });

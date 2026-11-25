@@ -47,7 +47,7 @@ export interface SimulationSummary {
 
 export interface InstrumentReading {
   instrumentId: string;
-  type: "MULTIMETER" | "OSCILLOSCOPE" | "BODE_PLOTTER" | "FUNCTION_GENERATOR";
+  type: "MULTIMETER" | "OSCILLOSCOPE" | "BODE_PLOTTER" | "FUNCTION_GENERATOR" | "VOLTMETER" | "AMMETER";
   status: InstrumentData["status"];
   readings: Record<string, unknown>;
   formatted: string;
@@ -230,5 +230,13 @@ export function formatInstrumentReading(d: InstrumentData): InstrumentReading {
         readings: { ...d },
         formatted: `FuncGen: ${d.waveform.toUpperCase()} ${fmt(d.amplitudeV, "V")} @ ${fmt(d.frequencyHz, "Hz")}, offset ${fmt(d.offsetV, "V")}, duty ${d.dutyCycle}%`,
       };
+    case "VOLTMETER":
+    case "AMMETER": {
+      const formatted =
+        d.value === null
+          ? `${d.status}${d.note ? `: ${d.note}` : ""}`
+          : `${fmt(d.value, d.unit)} ${d.coupling}`;
+      return { ...base, readings: { ...d }, formatted };
+    }
   }
 }

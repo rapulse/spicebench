@@ -504,7 +504,7 @@ describe("Desktop Package", () => {
         })
       );
 
-      expect(markup).toContain("0.000 V");
+      expect(markup).toContain("--- V");
       expect(markup).toContain("Voltage (Volts)");
       expect(markup).toContain("Current (Amperes)");
       expect(markup).toContain("Direct Current (DC)");

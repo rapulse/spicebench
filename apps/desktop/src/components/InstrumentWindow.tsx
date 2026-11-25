@@ -16,7 +16,7 @@ export const InstrumentWindow: React.FC<InstrumentWindowProps> = ({
   position,
   onMove,
   onClose,
-  width = 320,
+  width,
   zIndex = 100,
   onFocus,
   children,
@@ -72,7 +72,7 @@ export const InstrumentWindow: React.FC<InstrumentWindowProps> = ({
         position: "absolute",
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: `${width}px`,
+        width: width ? `${width}px` : "fit-content",
         zIndex,
         boxShadow: "2px 2px 8px rgba(0,0,0,0.45)",
       }}

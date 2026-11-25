@@ -586,7 +586,11 @@ export class CircuitSession {
     if (!comp) {
       throw new Error(`Instrument '${instrumentId}' not found in circuit.`);
     }
-    if (!["MULTIMETER", "OSCILLOSCOPE", "BODE_PLOTTER", "FUNCTION_GENERATOR"].includes(comp.type)) {
+    if (
+      !["MULTIMETER", "OSCILLOSCOPE", "BODE_PLOTTER", "FUNCTION_GENERATOR", "VOLTMETER", "AMMETER"].includes(
+        comp.type,
+      )
+    ) {
       throw new Error(`Component '${instrumentId}' is of type '${comp.type}', not an instrument.`);
     }
     let summary = this.lastSummary;

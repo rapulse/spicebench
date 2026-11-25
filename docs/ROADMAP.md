@@ -131,9 +131,14 @@ BJT), динамические элементы (лампочка, 7-сегме�
 - [x] **9.3а.** Smoke-тест компиляции и расчёта всех 33 типов компонентов (кроме GROUND) на
 ngspice в `.op` и `.tran` (`component-smoke.test.ts`). Макромодель 555 с RS-защёлкой и авто-`uic`
 (ADR-009, Fixture 11).
-- [ ] **9.3б.** Перепроверить 4 прибора вживую в GUI и сверить с EWB 5.12 внешний вид, порядок и
-тип кнопок (отдельная сессия с другим агентом). Бэкенд-данные проверены через MCP на живом
-приложении.
+- [~] **9.3б.** Перепроверить 4 прибора вживую в GUI и сверить с EWB 5.12 внешний вид, порядок и
+тип кнопок. Главное окно (`MenuBar`, `ToolBar` с SVG-иконками, 14 полок `PartsBin` с плавающими
+окнами, живые `Zoom/Copy/Paste/Activate/Stop/Grid`) и `OscilloscopePanel` приведены к эталонам
+`Image-1.jpeg` / `Image-1 3.jpeg`, закрыты `TODO(ui)` в `MultimeterPanel` и `BodePlotterPanel`.
+Добавлены 9 новых элементов (`VOLTMETER`, `AMMETER` на схеме, `AC_CURRENT_SOURCE`, `VCC`, `VDD`,
+`VCVS`, `VCCS`, `CCVS`, `CCCS` — каталог расширен до 43 типов, 183 теста зелёные). Сняты и сверены
+живые скриншоты Electron (`.tmp/ui-main-sources.png`, `.tmp/ui-scope-live.png`, `.tmp/ui-meters-live.png`).
+Оставшийся бэклог элементов/приборов вынесен в `docs/TODO.md`.
 - [x] **9.4.** MCP: только Streamable HTTP (`/mcp`, без legacy SSE), `McpServer` на клиента поверх общего
 `CircuitSession`, только loopback, проверка Origin/Host, без `CORS *` (ADR-010). Структурированные
 ошибки с `componentIds`; `rawResult` агенту не отправляется.

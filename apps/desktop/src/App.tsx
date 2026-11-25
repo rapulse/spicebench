@@ -58,6 +58,10 @@ export const App: React.FC = () => {
   const [editingComponent, setEditingComponent] = useState<Component | null>(null);
   const [mcpStatus, setMcpStatus] = useState<McpServerStatus | null>(null);
   const [isMcpDialogOpen, setIsMcpDialogOpen] = useState<boolean>(false);
+  const [zoom, setZoom] = useState<number>(1.0);
+  const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [showNodeVoltages, setShowNodeVoltages] = useState<boolean>(true);
+  const [clipboard, setClipboard] = useState<Component[]>([]);
 
   const refreshUndoState = useCallback(async () => {
     if (typeof window !== "undefined" && window.spicebenchApi?.canUndo) {
@@ -488,6 +492,10 @@ export const App: React.FC = () => {
       if (window.spicebenchApi?.updateInstrument) {
         try {
           await window.spicebenchApi.updateInstrument(state);
+          if (powerOn) {
+            const res = await window.spicebenchApi.runSimulation();
+            setSimulation(res);
+          }
         } catch (err) {
           console.error("Failed to update instrument state:", err);
         }
@@ -501,7 +509,7 @@ export const App: React.FC = () => {
         });
       }
     },
-    []
+    [powerOn]
   );
 
   const handleComponentDoubleClick = useCallback(
@@ -512,51 +520,6 @@ export const App: React.FC = () => {
         const currentInst = circuit.instruments.find((i) => i.instrumentId === comp.id);
         if (currentInst) {
           handleUpdateInstrument({ ...currentInst, isOpen: true });
-        } else {
-          if (comp.type === "MULTIMETER") {
-            handleUpdateInstrument({
-              instrumentId: comp.id,
-              isOpen: true,
-              windowPosition: { x: 120, y: 80 },
-              mode: "V",
-              currentType: "DC",
-            });
-          } else if (comp.type === "FUNCTION_GENERATOR") {
-            handleUpdateInstrument({
-              instrumentId: comp.id,
-              isOpen: true,
-              windowPosition: { x: 150, y: 100 },
-              waveform: "sine",
-              frequency: String(comp.params?.["frequency"] || "1kHz"),
-              dutyCycle: 50,
-              amplitude: String(comp.params?.["voltage"] || "5V"),
-              offset: "0V",
-            });
-          } else if (comp.type === "OSCILLOSCOPE") {
-            handleUpdateInstrument({
-              instrumentId: comp.id,
-              isOpen: true,
-              windowPosition: { x: 180, y: 120 },
-              timebase: "1ms/div",
-              xPos: 0,
-              chA: { scale: "5V/div", yPos: 0, coupling: "DC" },
-              chB: { scale: "5V/div", yPos: 0, coupling: "DC" },
-              trigger: { mode: "auto", edge: "positive", level: 0, source: "chA" },
-            });
-          } else if (comp.type === "BODE_PLOTTER") {
-            handleUpdateInstrument({
-              instrumentId: comp.id,
-              isOpen: true,
-              windowPosition: { x: 210, y: 140 },
-              mode: "magnitude",
-              scaleH: "log",
-              scaleV: "log",
-              fstart: "10Hz",
-              fstop: "100kHz",
-              vMin: -60,
-              vMax: 20,
-            });
-          }
         }
       } else {
         setEditingComponent(comp);
@@ -582,6 +545,80 @@ export const App: React.FC = () => {
       }
     },
     [refreshUndoState]
+  );
+
+  const handleZoomIn = useCallback(() => {
+    setZoom((z) => Math.min(2.0, Number((z + 0.2).toFixed(2))));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((z) => Math.max(0.5, Number((z - 0.2).toFixed(2))));
+  }, []);
+
+  const handleCopy = useCallback(() => {
+    const picked = circuit.components.filter((c) => selectedIds.includes(c.id));
+    if (picked.length === 0) return;
+    setClipboard(picked.map((c) => ({ ...c, params: { ...c.params }, position: { ...c.position } })));
+    setStatusText(`Copied ${picked.length} component(s)`);
+  }, [circuit.components, selectedIds]);
+
+  const handleCut = useCallback(async () => {
+    const picked = circuit.components.filter((c) => selectedIds.includes(c.id));
+    if (picked.length === 0) return;
+    setClipboard(picked.map((c) => ({ ...c, params: { ...c.params }, position: { ...c.position } })));
+    await handleDelete();
+    setStatusText(`Cut ${picked.length} component(s)`);
+  }, [circuit.components, selectedIds, handleDelete]);
+
+  const handlePaste = useCallback(async () => {
+    if (clipboard.length === 0 || !window.spicebenchApi) return;
+    const newIds: string[] = [];
+    for (const src of clipboard) {
+      try {
+        const placed = await window.spicebenchApi.placeComponent({
+          type: src.type,
+          x: src.position.x + 2,
+          y: src.position.y + 2,
+          rotation: src.rotation,
+          params: { ...src.params },
+        });
+        newIds.push(placed.id);
+      } catch (err) {
+        setStatusText(`Paste error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    if (newIds.length > 0) {
+      setSelectedIds(newIds);
+      setStatusText(`Pasted ${newIds.length} component(s)`);
+      refreshUndoState();
+    }
+  }, [clipboard, refreshUndoState]);
+
+  const handleOpenProperties = useCallback(() => {
+    const comp = circuit.components.find((c) => selectedIds.includes(c.id));
+    if (comp) {
+      handleComponentDoubleClick(comp);
+    } else {
+      setStatusText("Select a component to inspect its properties");
+    }
+  }, [circuit.components, selectedIds, handleComponentDoubleClick]);
+
+  const handleActivate = useCallback(async () => {
+    if (!powerOn) await handleTogglePower();
+  }, [powerOn, handleTogglePower]);
+
+  const handleStop = useCallback(async () => {
+    if (powerOn) await handleTogglePower();
+  }, [powerOn, handleTogglePower]);
+
+  const handleOpenInstrumentFromMenu = useCallback(
+    (instrumentId: string) => {
+      const inst = circuit.instruments.find((i) => i.instrumentId === instrumentId);
+      if (inst) {
+        handleUpdateInstrument({ ...inst, isOpen: true });
+      }
+    },
+    [circuit.instruments, handleUpdateInstrument]
   );
 
   // Global Keyboard Shortcuts
@@ -622,6 +659,21 @@ export const App: React.FC = () => {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
         handleSelectAll();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        handleCopy();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        handleCut();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        handlePaste();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        handleActivate();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        handleStop();
       } else if (e.key === "Escape") {
         setSelectedIds([]);
         setStatusText("Selection cleared");
@@ -655,6 +707,11 @@ export const App: React.FC = () => {
     handleRotate,
     handleDelete,
     handleSelectAll,
+    handleCopy,
+    handleCut,
+    handlePaste,
+    handleActivate,
+    handleStop,
     circuit.components,
     selectedIds,
     handleToggleSwitch,
@@ -673,15 +730,40 @@ export const App: React.FC = () => {
         onSave={handleSaveProject}
         onExportNetlist={handleExportNetlist}
         onImportNetlist={handleImportNetlist}
+        onExit={() => window.close()}
         onOpenSample={handleOpenSample}
         onValidate={handleValidate}
         onSimulate={handleSimulate}
+        onActivate={handleActivate}
+        onStop={handleStop}
         onRotate={handleRotate}
+        onProperties={handleOpenProperties}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        showGrid={showGrid}
+        onToggleGrid={() => setShowGrid((g) => !g)}
+        showNodeVoltages={showNodeVoltages}
+        onToggleNodeVoltages={() => setShowNodeVoltages((v) => !v)}
+        onCut={handleCut}
+        onCopy={handleCopy}
+        onPaste={handlePaste}
         onDelete={handleDelete}
         onSelectAll={handleSelectAll}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onOpenMcpDialog={() => setIsMcpDialogOpen(true)}
+        instruments={circuit.instruments.map((inst) => {
+          const comp = circuit.components.find((c) => c.id === inst.instrumentId);
+          return {
+            id: inst.instrumentId,
+            label: comp ? `${comp.type} - ${comp.label || comp.id}` : inst.instrumentId,
+            isOpen: inst.isOpen,
+          };
+        })}
+        onOpenInstrument={handleOpenInstrumentFromMenu}
+        onAbout={() =>
+          setStatusText("SpiceBench (Electronics Workbench 5.12 UI + ngspice-45.2 WASM + MCP)")
+        }
       />
 
       {/* 3. Main ToolBar + Power Rocker Switch */}
@@ -699,6 +781,17 @@ export const App: React.FC = () => {
         onRedo={handleRedo}
         canUndo={canUndo}
         canRedo={canRedo}
+        onCut={handleCut}
+        onCopy={handleCopy}
+        onPaste={handlePaste}
+        canPaste={clipboard.length > 0}
+        zoom={zoom}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onZoomChange={setZoom}
+        onHelp={() =>
+          setStatusText("Shortcuts: Ctrl+G Activate, Ctrl+T Stop, Ctrl+R Rotate, Ctrl+C/X/V Copy/Cut/Paste")
+        }
       />
 
       {/* 4. Parts Bin Shelf */}
@@ -719,6 +812,10 @@ export const App: React.FC = () => {
         onComponentDoubleClick={handleComponentDoubleClick}
         onToggleSwitch={handleToggleSwitch}
         onAdjustPotentiometer={handleAdjustPotentiometer}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        showGrid={showGrid}
+        showNodeVoltages={showNodeVoltages}
       >
         {/* Floating Instrument Windows */}
         {circuit.instruments

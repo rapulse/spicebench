@@ -227,8 +227,26 @@ export class TopologyValidator {
         continue;
       }
 
-      if (comp.type === "DC_CURRENT_SOURCE") {
+      if (comp.type === "DC_CURRENT_SOURCE" || comp.type === "AC_CURRENT_SOURCE") {
         // Ideal current source has infinite internal impedance
+        continue;
+      }
+
+      if (comp.type === "VCC" || comp.type === "VDD") {
+        // Supply rail is referenced directly to ground node 0 in SPICE
+        const outNet = pinToNetMap.get(`${comp.id}:out`);
+        if (outNet) addDcEdge(outNet, "0");
+        continue;
+      }
+
+      if (comp.type === "VCVS" || comp.type === "VCCS" || comp.type === "CCVS" || comp.type === "CCCS") {
+        // Controlled sources isolate input port from output port
+        const cp = pinToNetMap.get(`${comp.id}:ctrl_pos`);
+        const cn = pinToNetMap.get(`${comp.id}:ctrl_neg`);
+        const op = pinToNetMap.get(`${comp.id}:out_pos`);
+        const on = pinToNetMap.get(`${comp.id}:out_neg`);
+        if ((comp.type === "CCVS" || comp.type === "CCCS") && cp && cn) addDcEdge(cp, cn);
+        if ((comp.type === "VCVS" || comp.type === "CCVS") && op && on) addDcEdge(op, on);
         continue;
       }
 

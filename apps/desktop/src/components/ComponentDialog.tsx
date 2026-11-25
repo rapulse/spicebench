@@ -476,6 +476,36 @@ export const ComponentDialog: React.FC<ComponentDialogProps> = ({
         );
       }
 
+      case "VOLTMETER":
+      case "AMMETER": {
+        return (
+          <div>
+            <div className="ewb-dialog-row">
+              <span className="ewb-dialog-label">Mode:</span>
+              <select
+                className="ewb-dialog-select"
+                value={params["mode"] || "DC"}
+                onChange={(e) => updateParam("mode", e.target.value)}
+              >
+                <option value="DC">DC</option>
+                <option value="AC">AC (RMS)</option>
+              </select>
+            </div>
+            {component.type === "VOLTMETER" && (
+              <div className="ewb-dialog-row">
+                <span className="ewb-dialog-label">Resistance:</span>
+                <input
+                  type="text"
+                  className="ewb-dialog-input"
+                  value={params["resistance"] || "10meg"}
+                  onChange={(e) => updateParam("resistance", e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        );
+      }
+
       case "GROUND": {
         return (
           <div style={{ padding: "8px 0", color: "#404040" }}>

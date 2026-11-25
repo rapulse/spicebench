@@ -124,6 +124,7 @@ export function signalFrequencies(graph: CircuitGraph): number[] {
   for (const c of graph.getAllComponents()) {
     if (c.type === "FUNCTION_GENERATOR") out.push(getFunctionGeneratorSettings(graph, c).frequencyHz);
     else if (c.type === "AC_VOLTAGE_SOURCE") out.push(num(c.params["frequency"], 60));
+    else if (c.type === "AC_CURRENT_SOURCE") out.push(num(c.params["frequency"], 1));
     else if (c.type === "PULSE_VOLTAGE_SOURCE") {
       const period = num(c.params["period"], 0);
       if (period > 0) out.push(1 / period);

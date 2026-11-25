@@ -116,10 +116,11 @@ const UNIT_LABEL: Record<string, string> = { V: "V", A: "A", R: "Ω", dB: "dB" }
 
 function formatMultimeter(d: InstrumentData | undefined, mode: string): string {
   const unit = UNIT_LABEL[mode] ?? "V";
-  if (!d || d.type !== "MULTIMETER") return `0.000 ${unit}`; // power off
+  if (!d || d.type !== "MULTIMETER") return `--- ${unit}`; // power off — never fabricate 0
   if (d.value === null) {
-    // TODO(ui): EWB-style display for these states
-    return d.status === "not_connected" ? "----" : d.status === "invalid" ? "Err" : "---";
+    if (d.status === "not_connected") return "----";
+    if (d.status === "invalid") return "Err";
+    return "---";
   }
   if (d.unit === "dB") return Number.isFinite(d.value) ? `${d.value.toFixed(2)} dB` : "-∞ dB";
   const a = Math.abs(d.value);

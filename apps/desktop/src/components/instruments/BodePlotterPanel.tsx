@@ -2,16 +2,17 @@ import React, { useRef, useEffect, useState } from "react";
 import type { BodePlotterState, Component } from "@spicebench/core";
 import type { SimulationSummary } from "@spicebench/mcp";
 
-/** Adapter: backend Bode data -> { frequency, magnitudeDb: { h: series } } used by the drawing code. */
 function bodeSeries(
   simulation: SimulationSummary | null,
   id: string,
   mode: BodePlotterState["mode"],
-): { frequency: number[]; magnitudeDb: Record<string, number[]> } | null {
+): { frequency: number[]; values: number[]; unit: "dB" | "°"; minY: number; maxY: number } | null {
   const b = simulation?.instruments?.[id];
   if (!b || b.type !== "BODE_PLOTTER" || b.status !== "ok") return null;
-  // TODO(ui): phase mode needs its own vertical scale (degrees), not vMin/vMax in dB.
-  return { frequency: b.frequency, magnitudeDb: { h: mode === "phase" ? b.phaseDeg : b.magnitudeDb } };
+  if (mode === "phase") {
+    return { frequency: b.frequency, values: b.phaseDeg, unit: "°", minY: -180, maxY: 180 };
+  }
+  return { frequency: b.frequency, values: b.magnitudeDb, unit: "dB", minY: -60, maxY: 20 };
 }
 
 export interface BodePlotterPanelProps {
@@ -62,37 +63,30 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
     // 3. Draw AC frequency response curve if AC simulation data is present
     // Data comes pre-computed from the backend (ADR-011): H = V(OUT)/V(IN) of THIS plotter.
     const ac = bodeSeries(simulation, component.id, state.mode);
-    if (ac) {
-      {
-        const freqs = ac.frequency;
-        const outKeys = Object.keys(ac.magnitudeDb);
-        const outKey = outKeys[0];
+    if (ac && ac.frequency.length > 0) {
+      const freqs = ac.frequency;
+      const vals = ac.values;
+      const minY = state.mode === "phase" ? ac.minY : state.vMin;
+      const maxY = state.mode === "phase" ? ac.maxY : state.vMax;
+      const logFMin = Math.log10(Math.max(1, freqs[0]!));
+      const logFMax = Math.log10(Math.max(10, freqs[freqs.length - 1]!));
 
-        if (outKey && ac.magnitudeDb[outKey]) {
-          const dbs = ac.magnitudeDb[outKey]!;
-          const minDb = state.vMin;
-          const maxDb = state.vMax;
-          const logFMin = Math.log10(Math.max(1, freqs[0]!));
-          const logFMax = Math.log10(Math.max(10, freqs[freqs.length - 1]!));
+      ctx.strokeStyle = "#00ff88";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
 
-          ctx.strokeStyle = "#00ff88";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
+      for (let i = 0; i < freqs.length; i++) {
+        const f = freqs[i]!;
+        const v = vals[i]!;
+        const logF = Math.log10(Math.max(1, f));
 
-          for (let i = 0; i < freqs.length; i++) {
-            const f = freqs[i]!;
-            const db = dbs[i]!;
-            const logF = Math.log10(Math.max(1, f));
+        const px = ((logF - logFMin) / (logFMax - logFMin)) * width;
+        const py = height - ((v - minY) / (maxY - minY)) * height;
 
-            const px = ((logF - logFMin) / (logFMax - logFMin)) * width;
-            const py = height - ((db - minDb) / (maxDb - minDb)) * height;
-
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.stroke();
-        }
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       }
+      ctx.stroke();
     } else {
       // Idle response line
       ctx.strokeStyle = "#2e603e";
@@ -102,12 +96,12 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
       ctx.lineTo(width, height / 2);
       ctx.stroke();
     }
-  }, [simulation, state]);
+  }, [component.id, simulation, state]);
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const ac = bodeSeries(simulation, component.id, state.mode);
-    if (!canvas || !ac) return;
+    if (!canvas || !ac || ac.frequency.length === 0) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -119,17 +113,14 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
     const targetLogF = logFMin + ratio * (logFMax - logFMin);
     const targetF = Math.pow(10, targetLogF);
 
-    const outKey = Object.keys(ac.magnitudeDb)[0];
-    if (outKey && ac.magnitudeDb[outKey]) {
-      const idx = Math.min(
-        freqs.length - 1,
-        Math.max(0, Math.round(ratio * (freqs.length - 1)))
-      );
-      setCursorInfo({
-        freq: targetF,
-        val: ac.magnitudeDb[outKey]![idx] ?? 0,
-      });
-    }
+    const idx = Math.min(
+      freqs.length - 1,
+      Math.max(0, Math.round(ratio * (freqs.length - 1)))
+    );
+    setCursorInfo({
+      freq: targetF,
+      val: ac.values[idx] ?? 0,
+    });
   };
 
   return (
@@ -171,7 +162,10 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
           Freq: {cursorInfo ? `${cursorInfo.freq >= 1000 ? (cursorInfo.freq / 1000).toFixed(1) + " kHz" : cursorInfo.freq.toFixed(1) + " Hz"}` : "---"}
         </span>
         <span>
-          Gain: {cursorInfo ? `${cursorInfo.val.toFixed(2)} dB` : "---"}
+          {state.mode === "phase" ? "Phase" : "Gain"}:{" "}
+          {cursorInfo
+            ? `${cursorInfo.val.toFixed(2)} ${state.mode === "phase" ? "°" : "dB"}`
+            : "---"}
         </span>
       </div>
 
@@ -198,10 +192,10 @@ export const BodePlotterPanel: React.FC<BodePlotterPanelProps> = ({
         </fieldset>
 
         <fieldset style={{ flex: 1 }}>
-          <legend>Vertical (dB)</legend>
+          <legend>Vertical ({state.mode === "phase" ? "deg" : "dB"})</legend>
           <div style={{ display: "flex", gap: "4px", fontSize: "10px", alignItems: "center" }}>
-            <span>I: {state.vMin}</span>
-            <span>F: {state.vMax}</span>
+            <span>I: {state.mode === "phase" ? -180 : state.vMin}</span>
+            <span>F: {state.mode === "phase" ? 180 : state.vMax}</span>
           </div>
         </fieldset>
       </div>
