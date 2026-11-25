@@ -45,7 +45,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "RESISTOR":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polyline
               points="-12,0 -9,-6 -4,6 1,-6 6,6 9,-6 12,0"
               fill="none"
@@ -53,7 +53,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
             />
-            <line x1="12" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="12" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
@@ -62,20 +62,20 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         const wiperX = -10 + (pct / 100) * 20;
         return (
           <g>
-            <line x1="-20" y1="-6" x2="-12" y2="-6" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polyline
-              points="-12,-6 -9,-12 -4,0 1,-12 6,0 9,-12 12,-6"
+              points="-12,0 -9,-6 -4,6 1,-6 6,6 9,-6 12,0"
               fill="none"
               stroke={strokeColor}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
             />
-            <line x1="12" y1="-6" x2="20" y2="-6" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Wiper arrow */}
-            <line x1="0" y1="20" x2="0" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="10" x2={wiperX} y2="-1" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="12" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Wiper arrow to pin (0, 40) */}
+            <line x1="0" y1="40" x2="0" y2="14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2={wiperX} y2="5" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon
-              points={`${wiperX},-4 ${wiperX - 3},2 ${wiperX + 3},2`}
+              points={`${wiperX},2 ${wiperX - 3},8 ${wiperX + 3},8`}
               fill={strokeColor}
             />
           </g>
@@ -86,7 +86,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         const isClosed = params["state"] === "closed";
         return (
           <g>
-            <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <circle cx="-8" cy="0" r="2.5" fill={strokeColor} />
             {isClosed ? (
               <line x1="-8" y1="0" x2="8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
@@ -94,7 +94,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               <line x1="-8" y1="0" x2="6" y2="-12" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
             )}
             <circle cx="8" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
       }
@@ -102,20 +102,20 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "CAPACITOR":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-4" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-4" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-4" y1="-10" x2="-4" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
             <line x1="4" y1="-10" x2="4" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
-            <line x1="4" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="4" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "POLARIZED_CAPACITOR":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-4" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-4" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-4" y1="-10" x2="-4" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
             <path d="M 4 -10 Q 0 0 4 10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
-            <line x1="4" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="4" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <text x="-12" y="-6" fontSize="9" fill={strokeColor} fontWeight="bold">+</text>
           </g>
         );
@@ -123,14 +123,14 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "INDUCTOR":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path
               d="M -12 0 A 3 3 0 0 1 -6 0 A 3 3 0 0 1 0 0 A 3 3 0 0 1 6 0 A 3 3 0 0 1 12 0"
               fill="none"
               stroke={strokeColor}
               strokeWidth={strokeWidth}
             />
-            <line x1="12" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="12" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
@@ -147,10 +147,10 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "DC_VOLTAGE_SOURCE":
         return (
           <g>
-            <line x1="0" y1="-20" x2="0" y2="-4" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-40" x2="0" y2="-4" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-12" y1="-4" x2="12" y2="-4" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
             <line x1="-6" y1="4" x2="6" y2="4" stroke={strokeColor} strokeWidth={strokeWidth + 2} />
-            <line x1="0" y1="4" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="4" x2="0" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
             <text x="-14" y="-8" fontSize="10" fill="#cc0000" fontWeight="bold">+</text>
             <text x="-14" y="14" fontSize="10" fill="#0000cc" fontWeight="bold">-</text>
           </g>
@@ -160,8 +160,8 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         return (
           <g>
             <circle cx="0" cy="0" r="14" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="-20" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="14" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-40" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2="0" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path d="M -8 0 Q -4 -7 0 0 Q 4 7 8 0" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
@@ -170,8 +170,8 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         return (
           <g>
             <circle cx="0" cy="0" r="14" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="-20" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="14" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-40" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2="0" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="0" y1="-6" x2="0" y2="6" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polyline points="-4,2 0,6 4,2" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
@@ -181,8 +181,8 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         return (
           <g>
             <circle cx="0" cy="0" r="14" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="-20" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="0" y1="14" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-40" x2="0" y2="-14" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="0" y1="14" x2="0" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polyline points="-8,4 -8,-4 0,-4 0,4 8,4 8,-4" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
@@ -190,20 +190,20 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "DIODE":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="-8,-8 8,0 -8,8" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="-8" x2="8" y2="8" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
-            <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "ZENER_DIODE":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="-8,-8 8,0 -8,8" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path d="M 5 -8 L 8 -8 L 8 8 L 11 8" fill="none" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
-            <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
@@ -215,10 +215,10 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         return (
           <g>
             {isLedLit && <circle cx="0" cy="0" r="16" fill="#ff0000" opacity="0.3" />}
-            <line x1="-20" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="-8,-8 8,0 -8,8" fill={ledFill} stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="8" y1="-8" x2="8" y2="8" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
-            <line x1="8" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="8" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-2" y1="-10" x2="4" y2="-16" stroke="#ff8800" strokeWidth="1.5" />
             <polyline points="1,-16 4,-16 4,-13" fill="none" stroke="#ff8800" strokeWidth="1.5" />
             <line x1="4" y1="-7" x2="10" y2="-13" stroke="#ff8800" strokeWidth="1.5" />
@@ -232,11 +232,11 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
           <g>
             <circle cx="0" cy="0" r="16" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="-10" x2="-6" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
-            <line x1="-20" y1="0" x2="-6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="-5" x2="8" y2="-12" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="-12" x2="8" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="8,-12 20,-12 20,-40" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="5" x2="8" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="12" x2="8" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="8,12 20,12 20,40" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="7,10 8,14 4,13" fill={strokeColor} />
           </g>
         );
@@ -246,11 +246,11 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
           <g>
             <circle cx="0" cy="0" r="16" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="-10" x2="-6" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
-            <line x1="-20" y1="0" x2="-6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="-5" x2="8" y2="-12" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="-12" x2="8" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="8,-12 20,-12 20,-40" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-6" y1="5" x2="8" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="12" x2="8" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="8,12 20,12 20,40" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon points="-4,5 -1,8 -5,9" fill={strokeColor} />
           </g>
         );
@@ -262,16 +262,14 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
           <g>
             <circle cx="0" cy="0" r="16" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
             {/* Gate */}
-            <line x1="-20" y1="0" x2="-10" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-10" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <line x1="-10" y1="-10" x2="-10" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 1} />
             {/* Channel segments */}
             <line x1="-6" y1="-10" x2="-6" y2="10" stroke={strokeColor} strokeWidth={strokeWidth + 0.5} />
-            {/* Drain */}
-            <line x1="-6" y1="-7" x2="8" y2="-7" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="-7" x2="8" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
-            {/* Source */}
-            <line x1="-6" y1="7" x2="8" y2="7" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="8" y1="7" x2="8" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Top terminal (20, -40) */}
+            <polyline points="-6,-7 20,-7 20,-40" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Bottom terminal (20, 40) */}
+            <polyline points="-6,7 20,7 20,40" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             {/* Arrow */}
             {isPMOS ? (
               <polygon points="-2,7 2,4 2,10" fill={strokeColor} />
@@ -287,9 +285,9 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "OPAMP_741":
         return (
           <g>
-            {/* Inputs: (-20, -10) and (-20, 10) */}
-            <line x1="-20" y1="-10" x2="-12" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="10" x2="-12" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Inputs: (-60, -20) and (-60, 20) */}
+            <polyline points="-60,-20 -24,-20 -24,-10 -12,-10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-60,20 -24,20 -24,10 -12,10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             {/* Triangle body */}
             <polygon
               points="-12,-18 16,0 -12,18"
@@ -297,18 +295,18 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               stroke={strokeColor}
               strokeWidth={strokeWidth}
             />
-            {/* Output */}
-            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            {/* Output: (60, 0) */}
+            <line x1="16" y1="0" x2="60" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             {/* +/- marks */}
             <text x="-9" y="-7" fontSize="9" fontWeight="bold" fill="#000">-</text>
             <text x="-9" y="13" fontSize="9" fontWeight="bold" fill="#000">+</text>
-            {/* 741 supply pins if applicable */}
-            {type === "OPAMP_741" && (
+            {/* 741 supply pins: (0, -40) and (0, 40) */}
+            {(type === "OPAMP_741" || type === "OPAMP") && (
               <>
-                <line x1="0" y1="-20" x2="0" y2="-9" stroke={strokeColor} strokeWidth={strokeWidth} />
-                <line x1="0" y1="9" x2="0" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
-                <text x="3" y="-12" fontSize="7" fill="#888">V+</text>
-                <text x="3" y="17" fontSize="7" fill="#888">V-</text>
+                <line x1="0" y1="-40" x2="0" y2="-9" stroke={strokeColor} strokeWidth={strokeWidth} />
+                <line x1="0" y1="9" x2="0" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+                <text x="4" y="-14" fontSize="7" fill="#888">V+</text>
+                <text x="4" y="20" fontSize="7" fill="#888">V-</text>
               </>
             )}
           </g>
@@ -333,23 +331,23 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
       case "AND_GATE":
         return (
           <g>
-            <line x1="-20" y1="-10" x2="-10" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="10" x2="-10" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,-20 -20,-20 -20,-10 -10,-10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,20 -20,20 -20,10 -10,10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path
               d="M -10 -16 L 2 -16 A 16 16 0 0 1 2 16 L -10 16 Z"
               fill="#ffffff"
               stroke={strokeColor}
               strokeWidth={strokeWidth}
             />
-            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="16" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "NAND_GATE":
         return (
           <g>
-            <line x1="-20" y1="-10" x2="-10" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="10" x2="-10" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,-20 -20,-20 -20,-10 -10,-10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,20 -20,20 -20,10 -10,10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path
               d="M -10 -16 L 0 -16 A 16 16 0 0 1 0 16 L -10 16 Z"
               fill="#ffffff"
@@ -357,30 +355,30 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               strokeWidth={strokeWidth}
             />
             <circle cx="16" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="18.5" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="18.5" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "OR_GATE":
         return (
           <g>
-            <line x1="-20" y1="-10" x2="-8" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="10" x2="-8" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,-20 -20,-20 -20,-10 -8,-10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,20 -20,20 -20,10 -8,10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path
               d="M -12 -16 Q -2 -14 16 0 Q -2 14 -12 16 Q -6 0 -12 -16 Z"
               fill="#ffffff"
               stroke={strokeColor}
               strokeWidth={strokeWidth}
             />
-            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="16" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "NOR_GATE":
         return (
           <g>
-            <line x1="-20" y1="-10" x2="-8" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="10" x2="-8" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,-20 -20,-20 -20,-10 -8,-10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,20 -20,20 -20,10 -8,10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path
               d="M -12 -16 Q -4 -14 13 0 Q -4 14 -12 16 Q -6 0 -12 -16 Z"
               fill="#ffffff"
@@ -388,14 +386,14 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               strokeWidth={strokeWidth}
             />
             <circle cx="16" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="18.5" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="18.5" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "NOT_GATE":
         return (
           <g>
-            <line x1="-20" y1="0" x2="-10" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-10" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             <polygon
               points="-10,-12 10,0 -10,12"
               fill="#ffffff"
@@ -403,15 +401,15 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               strokeWidth={strokeWidth}
             />
             <circle cx="13" cy="0" r="2.5" fill="#ffffff" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="15.5" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="15.5" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
       case "XOR_GATE":
         return (
           <g>
-            <line x1="-20" y1="-10" x2="-12" y2="-10" stroke={strokeColor} strokeWidth={strokeWidth} />
-            <line x1="-20" y1="10" x2="-12" y2="10" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,-20 -20,-20 -20,-10 -12,-10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <polyline points="-40,20 -20,20 -20,10 -12,10" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path d="M -16 -16 Q -10 0 -16 16" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
             <path
               d="M -12 -16 Q -2 -14 16 0 Q -2 14 -12 16 Q -6 0 -12 -16 Z"
@@ -419,7 +417,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
               stroke={strokeColor}
               strokeWidth={strokeWidth}
             />
-            <line x1="16" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="16" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
 
@@ -430,7 +428,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
         const glowOpacity = Math.min(1.0, Math.max(0, (diff - 0.5) / 10.0));
         return (
           <g>
-            <line x1="-20" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="-40" y1="0" x2="-12" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
             {glowOpacity > 0 && (
               <circle cx="0" cy="0" r={16 + glowOpacity * 8} fill="#ffdd00" opacity={glowOpacity * 0.5} />
             )}
@@ -444,7 +442,7 @@ export const SchematicSymbol: React.FC<SchematicSymbolProps> = ({
             />
             {/* Filament */}
             <path d="M -5 -5 L 5 5 M -5 5 L 5 -5" stroke={glowOpacity > 0 ? "#ff6600" : strokeColor} strokeWidth="1.5" />
-            <line x1="12" y1="0" x2="20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <line x1="12" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           </g>
         );
       }

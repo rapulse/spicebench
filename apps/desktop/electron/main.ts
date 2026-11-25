@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,10 +16,17 @@ import { NetlistCompiler, SpiceImporter } from "@spicebench/sim";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function resolveWorkerPath(): string {
+  const bundled = path.join(__dirname, "ngspice-worker.js");
+  // Node worker_threads cannot load ESM scripts directly from inside app.asar
+  const unpacked = bundled.replace("app.asar" + path.sep, "app.asar.unpacked" + path.sep);
+  return unpacked !== bundled && existsSync(unpacked) ? unpacked : bundled;
+}
+
 let mainWindow: BrowserWindow | null = null;
 // ngspice (WASM) runs in a worker bundled next to main.js as dist-electron/ngspice-worker.js (ADR-007).
 const session = new CircuitSession(undefined, {
-  runner: { workerPath: path.join(__dirname, "ngspice-worker.js") },
+  runner: { workerPath: resolveWorkerPath() },
 });
 // Each MCP client gets its own McpServer bound to the shared session (ADR-010).
 const createMcpServerForClient = () => createSpiceBenchMcpServer({ session }).server;

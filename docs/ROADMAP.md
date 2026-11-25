@@ -146,6 +146,9 @@ ngspice в `.op` и `.tran` (`component-smoke.test.ts`). Макромодель 
 считаются в бэкенде (`SimulationSummary.instruments`), «Power On» выполняет все нужные анализы,
 нет фиктивных нулей для неподключённых щупов, реализованы омметр, AC и dB мультиметра, offset,
 скважность и инверсный выход генератора, Боде как `Vout/Vin`. AC-источник в RMS (ADR-012).
-- [ ] **9.5.** Пробная сборка `electron-builder --dir` на macOS и запуск дистрибутива с ngspice.
+- [x] **9.5.** Пробная сборка `electron-builder --dir` на macOS и запуск дистрибутива с ngspice.
+  Собран `apps/desktop/release/mac-arm64/SpiceBench.app` (с `asarUnpack` для `ngspice-worker.js` и
+  `eecircuit-engine-*.js`), запущен нативно и проверен живым MCP-тестом (`.tmp/live-instruments-check.mjs`):
+  `ngspice-wasm` работает внутри `.app`, XMM1=499.69 mV AC, XSC1=2.000 Vpp, XBP1=-0.01 dB @ 10 Hz.
 - **Критерий готовности:** все расчёты идут через ngspice; критерии Фаз 6 и 7 подтверждены
 запуском, а не только тестами.

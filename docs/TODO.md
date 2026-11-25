@@ -56,7 +56,7 @@
   - Формат подписей номиналов синим в стиле EWB (`1.5 k Ohm`, `240 mH`, `10 V/1 kHz/0 Deg`).
 
 ## 4. Сборка и инфраструктура (ROADMAP 9.5 / хвосты)
-- [ ] **9.5:** `pnpm --filter @spicebench/desktop pack` на macOS + проверка работы `ngspice` WASM внутри `.app`.
+- [x] **9.5:** `electron-builder --dir` на macOS + проверка работы `ngspice` WASM внутри `SpiceBench.app` (готово; при желании собрать `.dmg` командой `electron-builder --mac`).
 - [ ] **Headless MCP CLI (`packages/mcp/dist/cli.js`):** проверить и починить запуск в чистом Node (расширения импортов `.js` в ESM).
 - [ ] **README.md:** с согласия пользователя актуализировать незакоммиченный раздел «Дополнительно» (убрать `/sse` и XSPICE по ADR-008/010/012).
 - [ ] **Реальные MCP-клиенты:** проверить конфиги Claude Desktop (`mcp-remote`), Antigravity (`serverUrl`) и `NativeNgspiceEngine` при наличии локального `ngspice` CLI.
