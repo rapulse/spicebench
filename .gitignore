@@ -49,3 +49,6 @@ Thumbs.db
 
 # Local scratch (agent probes, temp files)
 .tmp/
+
+# Local reference materials (screenshots & manuals, not for public repo)
+electronics-workbench/

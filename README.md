@@ -137,6 +137,13 @@ Example client config (Cursor / Claude Code):
 
 ---
 
+## Authors & Credits
+
+- **Concept & Co-author:** [Taraved](https://github.com/Taraved/)
+- **Engine:** [`ngspice 45.2`](https://ngspice.sourceforge.io/) (Modified BSD) via [`eecircuit-engine`](https://www.npmjs.com/package/eecircuit-engine)
+
+---
+
 ## Legal Notice (Clean-Room Implementation)
 
 SpiceBench is an independent, clean-room open-source project. It is **not** affiliated with Interactive Image Technologies or National Instruments (NI Multisim). No original Electronics Workbench binary code or assets are used; all circuit solving is performed by **`ngspice`** (Modified BSD license).
@@ -247,6 +254,13 @@ cd apps/desktop && ./node_modules/.bin/electron-builder --dir -c electron-builde
   }
 }
 ```
+
+---
+
+## Авторы
+
+- **Идея программы и соавтор:** [Taraved](https://github.com/Taraved/)
+- **Расчётное ядро:** [`ngspice 45.2`](https://ngspice.sourceforge.io/) (Modified BSD) через [`eecircuit-engine`](https://www.npmjs.com/package/eecircuit-engine)
 
 ---
 
