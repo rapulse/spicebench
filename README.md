@@ -4,6 +4,14 @@
 
 > A modern, cross-platform (**macOS Apple Silicon / Intel** & **Windows 10/11**) electronic circuit simulator inspired by the classic **Electronics Workbench 5.12** workflow — powered by the real **`ngspice 45.2`** SPICE engine (WebAssembly via `eecircuit-engine`) with a built-in **MCP (Model Context Protocol) server** for AI agents.
 
+## Download
+
+Ready-to-run installers for **Windows 10/11** (`.exe` installer & portable) and **macOS** (`.dmg` / `.zip` for Apple Silicon & Intel) are available on the Releases page:
+
+**[Download Latest Release (GitHub Releases)](https://github.com/rapulse/spicebench/releases/latest)**
+
+> **Note:** macOS and Windows builds are currently unsigned. On macOS, right-click `SpiceBench.app` → **Open** on first launch; on Windows, click **More info → Run anyway** in SmartScreen if prompted.
+
 ---
 
 ## Core Idea
@@ -154,6 +162,14 @@ SpiceBench is an independent, clean-room open-source project. It is **not** affi
 # Русская версия
 
 > Современная кроссплатформенная (**macOS Apple Silicon / Intel** и **Windows 10/11**) редакция классического симулятора электронных схем в стиле **Electronics Workbench 5.12** — на базе настоящего SPICE-ядра **`ngspice 45.2`** (WebAssembly через `eecircuit-engine`) и со встроенным **MCP-сервером (Model Context Protocol)** для ИИ-агентов.
+
+## Скачать
+
+Готовые сборки для **Windows 10/11** (установщик `.exe` и portable) и **macOS** (`.dmg` / `.zip` для Apple Silicon и Intel) доступны на странице релизов:
+
+**[Скачать последнюю версию (GitHub Releases)](https://github.com/rapulse/spicebench/releases/latest)**
+
+> **Примечание:** сборки пока не подписаны сертификатами Apple/Windows. На macOS при первом запуске открой `SpiceBench.app` через ПКМ → **Открыть**; на Windows в окне SmartScreen нажми **Подробнее → Выполнить в любом случае**.
 
 ---
 
